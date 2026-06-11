@@ -388,8 +388,12 @@ async function fetchStravaActivities(){
     if(!Array.isArray(json)){console.error("Unexpected Strava response:",json);syncStatus("Strava error: "+JSON.stringify(json),true);return;}
     if(json.length>0){
       const a=json[0];
-      console.log("First activity keys:",Object.keys(a));
-      console.log("sport_type:",a.sport_type,"distance:",a.distance,"moving_time:",a.moving_time,"start_date_local:",a.start_date_local,"total_elevation_gain:",a.total_elevation_gain,"average_heartrate:",a.average_heartrate,"suffer_score:",a.suffer_score,"weighted_average_watts:",a.weighted_average_watts);
+      console.log("FIRST ACTIVITY:",a.name,a.sport_type,"start_date_local:["+a.start_date_local+"]","start_date:["+a.start_date+"]","dist:",a.distance,"parsed local:",parseLocalDate(a.start_date_local||a.start_date).toDateString());
+      // check how many match the current week card dates
+      const testBounds=weekBounds("08-Jun");
+      if(testBounds)console.log("08-Jun bounds:",testBounds.start.toDateString(),"→",testBounds.end.toDateString());
+      const jun8acts=stravaActivities.filter?stravaActivities:[json];
+      console.log("Activities matching 08-Jun week:",json.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date);const b=weekBounds("08-Jun");return b&&d>=b.start&&d<b.end;}).map(a=>a.name+" "+a.start_date_local));
     }
     stravaActivities=json;
     syncStatus("Synced ✓ · "+json.length+" activities");
@@ -416,21 +420,21 @@ function fmtPace(m,s){// min/km for run, min/100m for swim
 function fmtPaceSwim(m,s){if(m<=0||s<=0)return"—";const secPer=s/(m/100);const min=Math.floor(secPer/60),sec=Math.round(secPer%60);return`${min}:${sec.toString().padStart(2,"0")}`;}
 function discColor(sport){const d=SPORT_DISC[sport]||"rest";return`var(--${d})`;}
 function weekBounds(dateStr){
-  // dateStr like "15-Jun" or "08-Jun" → return {start, end} as Date objects
   const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
   const parts=dateStr.split("-");
   if(parts.length!==2)return null;
   const day=parseInt(parts[0]);const mon=months[parts[1]];
   if(isNaN(day)||mon===undefined)return null;
   const year=new Date().getFullYear();
-  const start=new Date(year,mon,day);
-  const end=new Date(year,mon,day+7);
+  const start=new Date(year,mon,day);start.setHours(0,0,0,0);
+  const end=new Date(year,mon,day+7);end.setHours(23,59,59,999);
   return{start,end};
 }
 function activitiesForWeek(dateStr){
   const bounds=weekBounds(dateStr);if(!bounds)return[];
   return stravaActivities.filter(a=>{
-    const d=parseLocalDate(a.start_date_local||a.start_date);
+    const raw=a.start_date_local||a.start_date||"";
+    const d=parseLocalDate(raw);
     return d>=bounds.start && d<bounds.end;
   });
 }
@@ -444,11 +448,12 @@ function acts_this_week_count(){
   return stravaActivities.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date||"");return d>=start&&d<end;}).length;
 }
 function parseLocalDate(str){
-  // parse "2026-06-11T06:22:59" as local time, not UTC
+  // Always treat the date as local — strip Z/timezone suffix
   if(!str)return new Date(0);
-  const m=str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  const s=str.replace("Z","").replace(/[+-]\d{2}:\d{2}$/,"");
+  const m=s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
   if(m)return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]);
-  return new Date(str);
+  return new Date(s);
 }
 function weeklyTotals(weeksBack=0){
   const now=new Date();const start=new Date(now);
@@ -587,10 +592,11 @@ function weekCard(w){
 
   // Strava activities for this week
   const wkActs=activitiesForWeek(w.date);
-  if(wkActs.length||stravaToken){
-    const al=document.createElement("div");al.className="col-label";al.textContent="Strava activities";body.appendChild(al);
+  {
+    const al=document.createElement("div");al.className="col-label";al.textContent="Strava activities"+(stravaToken?" ("+wkActs.length+")":" — connect Strava to sync");body.appendChild(al);
     const ac=document.createElement("div");ac.className="strava-activities";
-    if(wkActs.length===0&&stravaToken){const lbl=document.createElement("div");lbl.className="strava-loading";lbl.textContent="No activities recorded this week yet.";ac.appendChild(lbl);}
+    if(!stravaToken){const lbl=document.createElement("div");lbl.className="strava-loading";lbl.textContent="Connect Strava (button in header) to auto-populate activities.";ac.appendChild(lbl);}
+    else if(wkActs.length===0){const lbl=document.createElement("div");lbl.className="strava-loading";lbl.textContent="No Strava activities found for this week ("+w.date+").";ac.appendChild(lbl);}
     wkActs.forEach(a=>{
       const sport=a.sport_type||"Run";
       const card=document.createElement("div");card.className="act-card";
