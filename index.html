@@ -22,33 +22,29 @@
   h1{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:clamp(26px,5vw,40px);letter-spacing:-.02em;margin:0;line-height:1.02}
   .eyebrow{font-family:"JetBrains Mono",monospace;text-transform:uppercase;letter-spacing:.22em;font-size:11px;color:var(--ink-soft)}
   header{margin-bottom:22px}
-  .topline{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
-  .race-chip{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
-  .race-edit{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-  .race-edit input{font-family:"JetBrains Mono",monospace;border:1px solid var(--line-strong);background:var(--card);border-radius:8px;padding:6px 8px;color:var(--ink);font-size:13px}
-  .race-edit input[type=text]{width:150px}
-  .countdown{display:flex;align-items:baseline;gap:8px}
-  .countdown b{font-family:"Space Grotesk",sans-serif;font-size:34px;font-weight:700;line-height:1;color:var(--race)}
-  .countdown span{font-family:"JetBrains Mono",monospace;font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-soft)}
-  .stats{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;margin-top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+  .topline{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  /* stats bar */
+  .stats{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
   .ring{--p:0;width:78px;height:78px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--good) calc(var(--p)*1%), var(--line) 0);flex:none}
   .ring i{width:60px;height:60px;border-radius:50%;background:var(--card);display:grid;place-items:center;font-style:normal;font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:18px}
   .disc-counts{display:flex;gap:10px;flex-wrap:wrap}
   .dc{display:flex;align-items:center;gap:7px;font-family:"JetBrains Mono",monospace;font-size:13px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#fff}
   .dot{width:9px;height:9px;border-radius:50%;flex:none}
   .dc b{font-weight:700}.dc small{color:var(--ink-soft)}
+  /* timeline */
   .timeline-wrap{margin-top:18px;border:1px solid var(--line);background:var(--card);border-radius:var(--radius);padding:14px 16px 16px;box-shadow:var(--shadow);overflow-x:auto}
   .timeline{display:flex;gap:4px;min-width:640px}
-  .seg{flex:1;min-width:50px;border-radius:8px;padding:9px 8px;color:#fff;position:relative;transition:transform .15s ease}
+  .seg{flex:1;min-width:50px;border-radius:8px;padding:9px 8px;color:#fff;position:relative;transition:transform .15s ease;cursor:default}
   .seg:hover{transform:translateY(-2px)}
   .seg .ph{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.06em;opacity:.92}
   .seg .dt{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:13px;margin-top:2px}
   .seg.is-race{outline:2px solid var(--ink);outline-offset:1px}
   .seg .flag{position:absolute;top:-9px;right:6px;font-size:13px}
+  /* week cards */
   .weeks{margin-top:22px;display:flex;flex-direction:column;gap:14px}
   .week{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--rail,var(--rest));border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
   .week.race{--rail:var(--race);border-color:#E7D9A0;background:linear-gradient(180deg,#FCF8E9,#FBFCFD 60%)}
-  .wk-head{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer}
+  .wk-head{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none}
   .wk-date{font-family:"JetBrains Mono",monospace;font-weight:700;font-size:16px;letter-spacing:.02em;min-width:62px}
   .phase-tag{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;padding:4px 9px;border-radius:999px;color:#fff;white-space:nowrap}
   .wk-meta{margin-left:auto;display:flex;align-items:center;gap:12px}
@@ -60,6 +56,7 @@
   .focus{font-size:13.5px;color:var(--ink-soft);font-style:italic;border-left:2px solid var(--line-strong);padding:2px 0 2px 12px;margin:2px 0 14px}
   .focus[contenteditable]:focus{outline:none;color:var(--ink);border-left-color:var(--ink)}
   .col-label{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-soft);margin:14px 0 7px}
+  /* planned sessions */
   .plan{display:flex;flex-direction:column;gap:3px}
   .pitem{display:flex;align-items:center;gap:9px;padding:5px 6px;border-radius:9px;transition:background .12s}
   .pitem:hover{background:#F1F4F6}
@@ -67,39 +64,44 @@
   .check{appearance:none;-webkit-appearance:none;width:19px;height:19px;border:1.5px solid var(--line-strong);border-radius:6px;flex:none;cursor:pointer;position:relative;background:#fff;transition:.12s}
   .check:checked{background:var(--good);border-color:var(--good)}
   .check:checked::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
-  .check:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
   .chip{font-family:"JetBrains Mono",monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:#fff;border:none;border-radius:6px;padding:3px 6px;min-width:46px;text-align:center;cursor:pointer;flex:none}
-  .chip:hover{filter:brightness(1.06)}
+  .chip:hover{filter:brightness(1.1)}
   .ptext{flex:1;border:none;background:none;font:inherit;color:var(--ink);padding:3px 2px;border-bottom:1px solid transparent;min-width:0}
   .ptext:focus{outline:none;border-bottom-color:var(--line-strong)}
   .del{border:none;background:none;color:var(--ink-soft);cursor:pointer;opacity:0;font-size:16px;line-height:1;padding:2px 4px;flex:none}
   .pitem:hover .del{opacity:.6}.del:hover{opacity:1;color:var(--run)}
   .add-sess{margin-top:6px;border:1px dashed var(--line-strong);background:none;color:var(--ink-soft);font-family:"JetBrains Mono",monospace;font-size:11px;border-radius:8px;padding:6px 10px;cursor:pointer}
   .add-sess:hover{border-color:var(--ink);color:var(--ink)}
+  /* notes */
   .two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px}
   @media(max-width:620px){.two{grid-template-columns:1fr}}
   textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 11px;font:inherit;color:var(--ink);resize:none;min-height:62px;line-height:1.45}
   textarea:focus{outline:none;border-color:var(--ink)}
   textarea::placeholder{color:#A4AEB7}
-  .habits{margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:580px){.habits{grid-template-columns:1fr}}
-  .habit-block{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 13px}
-  .habit-block h4{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.18em;color:var(--ink-soft);margin:0 0 10px}
-  .day-rows{display:flex;flex-direction:column;gap:5px}
-  .day-row{display:flex;align-items:center;gap:9px}
-  .day-label{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);width:26px;flex:none}
-  .day-input{flex:1;border:none;border-bottom:1px solid var(--line);background:none;font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--ink);padding:3px 2px;min-width:0}
-  .day-input:focus{outline:none;border-bottom-color:var(--ink)}
+  /* habits combined table */
+  .habits-wrap{margin-top:16px}
+  .habits-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-family:"JetBrains Mono",monospace;font-size:13px}
+  .habits-table th{font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-soft);padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);background:#F7F9FA;font-weight:500}
+  .habits-table th:not(:first-child){text-align:center}
+  .habits-table td{padding:5px 8px;border-bottom:1px solid var(--line)}
+  .habits-table tr:last-child td{border-bottom:none}
+  .habits-table td:first-child{color:var(--ink-soft);font-size:11px;width:44px;padding-left:12px}
+  .habits-table td:not(:first-child){text-align:center}
+  .habit-inp{width:100%;border:none;background:none;font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--ink);text-align:center;padding:4px 2px;border-bottom:1px solid transparent}
+  .habit-inp:focus{outline:none;border-bottom-color:var(--line-strong)}
+  .habit-inp::placeholder{color:#C8D0D8}
+  /* race callout */
   .race-targets{font-size:13.5px;background:#fff;border:1px solid #E7D9A0;border-radius:10px;padding:11px 13px;margin-top:8px}
+  /* controls */
   .controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
   button.act{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.04em;border-radius:10px;padding:11px 16px;cursor:pointer;border:1px solid var(--ink);background:var(--ink);color:#fff}
   button.act:hover{background:#000}
-  button.ghost{background:none;color:var(--ink)}button.ghost:hover{background:#fff}
+  button.ghost{background:none;color:var(--ink)}
+  button.ghost:hover{background:#fff}
   .save-flash{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;font-family:"JetBrains Mono",monospace;font-size:12px;padding:9px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:.25s;z-index:50}
   .save-flash.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .note{font-size:12.5px;color:var(--ink-soft);margin-top:24px;line-height:1.6}
-  a{color:var(--swim)}
-  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
   :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 </style>
 
@@ -109,13 +111,6 @@
       <div>
         <div class="eyebrow">Triathlon training log · Stefano</div>
         <h1 contenteditable data-field="title" spellcheck="false">The Big Build</h1>
-      </div>
-      <div class="race-chip">
-        <div class="countdown"><b id="cdNum">—</b><span>days to T100 sim</span></div>
-        <div class="race-edit">
-          <input type="text" id="raceName" aria-label="Benchmark name">
-          <input type="date" id="raceDate" aria-label="Benchmark date">
-        </div>
       </div>
     </div>
     <div class="stats">
@@ -136,28 +131,45 @@
   </div>
   <p class="note" id="footnote"></p>
 </div>
-<div class="save-flash" id="flash">Saved &check;</div>
+
+<div class="save-flash" id="flash">Saved ✓</div>
 
 <script>
-const KEY="tri_log_state_v2";
+const KEY="tri_log_state_v3";
 const DISC={swim:{c:"var(--swim)",label:"Swim"},bike:{c:"var(--bike)",label:"Bike"},run:{c:"var(--run)",label:"Run"},strength:{c:"var(--strength)",label:"Stren"},brick:{c:"var(--brick)",label:"Brick"},race:{c:"var(--race)",label:"Sim"},rest:{c:"var(--rest)",label:"Rest"}};
 const PHASE={"Re-entry":"var(--rest)","Base":"var(--swim)","Build":"var(--bike)","Sim Wk":"var(--race)","Sim":"var(--race)","Reload":"var(--strength)","Build 2":"var(--bike)","Brick Block":"var(--brick)","Peak":"var(--run)","Deload":"var(--rest)","Build 3":"var(--swim)","Benchmark":"var(--brick)"};
 const CYCLE=["swim","bike","run","brick","strength","rest"];
-let state,saveTimer,storageOK=true;
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+let state,saveTimer;
+
 function uid(){return Math.random().toString(36).slice(2,9)}
 function P(disc,text,done){return{id:uid(),disc,text,done:!!done}}
 function emptyHabits(){
-  const h={smoking:{},drinking:{}};
-  DAYS.forEach(d=>{h.smoking[d]="";h.drinking[d]="";});
+  const h={};
+  DAYS.forEach(function(d){h[d]={cigs:"",drinks:""};});
   return h;
 }
 
+/* ---------- localStorage persistence ---------- */
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(raw){state=JSON.parse(raw);return;}
+  }catch(e){}
+  state=defaultState();
+  save(true);
+}
+function save(silent){
+  try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
+  if(!silent)flash();
+}
+function schedule(){clearTimeout(saveTimer);saveTimer=setTimeout(function(){save();},450)}
+function flash(){var f=document.getElementById("flash");f.textContent="Saved \u2713";f.classList.add("show");clearTimeout(f._t);f._t=setTimeout(function(){f.classList.remove("show");},1100)}
+
+/* ---------- default plan ---------- */
 function defaultState(){
   return {
     title:"The Big Build",
-    raceName:"T100 sim · training day",
-    raceDate:"2026-07-04",
     weeks:[
       {id:uid(),date:"08-Jun",phase:"Re-entry",collapsed:false,
         focus:"Three days easing after Alghero — then we build, hard. Bike floor still ~150k, all aerobic.",
@@ -172,15 +184,15 @@ function defaultState(){
         planned:[P("swim","Swim 2,200m — technique + pull"),P("swim","Swim 2,600m — 5x200 @ CSS"),P("swim","Swim 3,000m continuous"),P("bike","Bike 50k — 2x20 min @ threshold"),P("bike","Bike 90k Z2 long"),P("bike","Bike 45k endurance / brick"),P("run","Run 55 min — 5x4 min @ 4,55"),P("run","Run 50 min — 4x6 min tempo @ 5,05"),P("run","Run 1h40 long (~18k)"),P("run","Run 35 min easy + strides"),P("strength","Strength A — legs + core"),P("strength","Strength B — power + mobility")],
         did:"",comments:"",habits:emptyHabits()},
       {id:uid(),date:"29-Jun",phase:"Sim Wk",collapsed:false,
-        focus:"Loaded but NOT tapered — Saturday's T100 sim lands on training legs, which makes it a better stimulus. Bike incl. the 80k sim ~185k.",
+        focus:"Loaded but NOT tapered — Saturday's T100 sim lands on training legs. Bike incl. the 80k sim ~185k.",
         planned:[P("swim","Swim 2,400m — drills + sighting"),P("swim","Swim 2,600m — 8x100 @ CSS"),P("bike","Bike 45k — openers 4x4 min @ Z4"),P("bike","Bike 60k Z2"),P("run","Run 50 min — 5x3 min @ 4,55"),P("run","Run 70 min easy long"),P("strength","Strength A — legs + core"),P("strength","Mobility 30 min")],
         did:"",comments:"",habits:emptyHabits()},
       {id:uid(),date:"04-Jul",phase:"Sim",collapsed:false,isRace:true,
-        focus:"Not a race — a benchmark. One hard, honest training day: 2k → 80k → 18k, back to back. Fuel 60–90g carbs/hr on the bike. See how the engine holds, then learn from it.",
+        focus:"Not a race — a benchmark training day. 2k → 80k → 18k, back to back on training legs. Fuel 60–90g carbs/hr on the bike. See where the engine holds, then learn from it.",
         planned:[P("race","T100 SIM — Swim 2k → Bike 80k → Run 18k (one continuous day)")],
         did:"",comments:"",habits:emptyHabits()},
       {id:uid(),date:"06-Jul",phase:"Reload",collapsed:false,
-        focus:"Reload, don't collapse. Hard intensity off for a week so you absorb the sim; bike stays at the 150k floor, all easy. Sleep is the session this week.",
+        focus:"Reload, don't collapse. Hard intensity off for a week; bike stays at the 150k floor, all easy. Sleep is the session this week.",
         planned:[P("swim","Swim 2,000m easy technique"),P("swim","Swim 2,400m — relaxed CSS"),P("bike","Bike 50k easy Z2"),P("bike","Bike 100k Z2 (easy long, social)"),P("run","Run 40 min easy + strides"),P("run","Run 70 min easy"),P("strength","Strength B — full body light + mobility")],
         did:"",comments:"",habits:emptyHabits()},
       {id:uid(),date:"13-Jul",phase:"Build 2",collapsed:false,
@@ -196,7 +208,7 @@ function defaultState(){
         planned:[P("swim","Swim 3,000m — race-pace sets"),P("swim","Swim 3,500m continuous (open water)"),P("swim","Swim 2,600m drills + speed"),P("bike","Bike 60k over-unders 4x(5 Z3/3 Z4)"),P("bike","Bike 150k single long ride — fuel it properly"),P("run","Run 70 min — 8x5 min @ 4,50"),P("run","Run 2h long (~22–23k)"),P("run","Run 45 min easy + strides"),P("strength","Strength A — legs + core"),P("strength","Strength B — power + mobility")],
         did:"",comments:"",habits:emptyHabits()},
       {id:uid(),date:"03-Aug",phase:"Deload",collapsed:false,
-        focus:"Deload. Pull the hard stuff, hold the 150k aerobic floor. You've earned the absorb week — take it so the next block lands.",
+        focus:"Deload. Pull the hard stuff, hold the 150k aerobic floor. You've earned the absorb week — take it.",
         planned:[P("swim","Swim 2,000m easy"),P("swim","Swim 2,400m relaxed"),P("bike","Bike 50k easy Z2"),P("bike","Bike 100k easy Z2"),P("run","Run 40 min easy + strides"),P("run","Run 75 min easy"),P("strength","Strength B — light + mobility")],
         did:"",comments:"",habits:emptyHabits()},
       {id:uid(),date:"10-Aug",phase:"Build 3",collapsed:false,
@@ -204,154 +216,220 @@ function defaultState(){
         planned:[P("swim","Swim 2,800m — speed + CSS"),P("swim","Swim 3,200m continuous"),P("swim","Swim 2,400m drills"),P("bike","Bike 55k — 4x10 min @ threshold"),P("bike","Bike 100k Z2 long"),P("brick","Brick 2h30 bike + 35 run @ 5,10"),P("run","Run 65 min — 5x6 min @ 4,50"),P("run","Run 1h55 long"),P("run","Run 40 min easy + strides"),P("strength","Strength A — legs + core"),P("strength","Strength B — power + mobility")],
         did:"",comments:"",habits:emptyHabits()},
       {id:uid(),date:"17-Aug",phase:"Benchmark",collapsed:false,
-        focus:"Benchmark week — test swim CSS, bike FTP and a run TT to measure how far the engine's come since June. Then pick your next target and keep adding weeks. Bike ~180k.",
+        focus:"Benchmark week — test swim CSS, bike FTP and a run TT to measure how far the engine has come since June. Then pick your next target and keep adding weeks.",
         planned:[P("swim","Swim 1,000m time-trial (CSS test) + 2,000m easy"),P("swim","Swim 3,000m continuous"),P("bike","Bike 40k FTP test (20 min all-out)"),P("bike","Bike 90k Z2 long"),P("bike","Bike 50k endurance"),P("run","Run 5k or 10k time-trial (all-out)"),P("run","Run 1h50 long"),P("run","Run 40 min easy"),P("strength","Strength A — legs + core"),P("strength","Strength B — mobility")],
         did:"",comments:"",habits:emptyHabits()}
     ]
   };
 }
 
-async function load(){
-  try{const r=await window.storage.get(KEY);if(r&&r.value){state=JSON.parse(r.value);return;}}
-  catch(e){if(!window.storage){storageOK=false;}}
-  state=defaultState();await save(true);
-}
-async function save(silent){
-  try{await window.storage.set(KEY,JSON.stringify(state));if(!silent)flash();}
-  catch(e){storageOK=false;if(!silent)flash("Saved for this session");}
-}
-function schedule(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>save(),450)}
-function flash(msg){const f=document.getElementById("flash");f.textContent=msg||"Saved \u2713";f.classList.add("show");clearTimeout(f._t);f._t=setTimeout(()=>f.classList.remove("show"),1100)}
-
+/* ---------- render ---------- */
 function render(){
-  document.getElementById("raceName").value=state.raceName;
-  document.getElementById("raceDate").value=state.raceDate;
-  const t=document.querySelector('[data-field="title"]');if(t.textContent!==state.title)t.textContent=state.title;
-  renderTimeline();renderWeeks();updateStats();updateCountdown();renderFootnote();
+  var t=document.querySelector('[data-field="title"]');
+  if(t.textContent!==state.title)t.textContent=state.title;
+  renderTimeline();renderWeeks();updateStats();renderFootnote();
 }
 function renderTimeline(){
-  const el=document.getElementById("timeline");el.innerHTML="";
-  state.weeks.forEach(w=>{
-    const s=document.createElement("div");s.className="seg"+(w.isRace?" is-race":"");
+  var el=document.getElementById("timeline");el.innerHTML="";
+  state.weeks.forEach(function(w){
+    var s=document.createElement("div");s.className="seg"+(w.isRace?" is-race":"");
     s.style.background=PHASE[w.phase]||"var(--rest)";
-    s.innerHTML=(w.isRace?'<span class="flag">\u23F1</span>':'')+'<div class="ph">'+w.phase+'</div><div class="dt">'+w.date+'</div>';
+    s.innerHTML=(w.isRace?'<span class="flag">&#9201;</span>':'')+'<div class="ph">'+w.phase+'</div><div class="dt">'+w.date+'</div>';
     el.appendChild(s);
   });
 }
-function renderWeeks(){const c=document.getElementById("weeks");c.innerHTML="";state.weeks.forEach(w=>c.appendChild(weekCard(w)));}
+function renderWeeks(){var c=document.getElementById("weeks");c.innerHTML="";state.weeks.forEach(function(w){c.appendChild(weekCard(w));});}
+
 function weekCard(w){
-  const total=w.planned.filter(p=>p.disc!=="race"&&p.disc!=="rest").length;
-  const done=w.planned.filter(p=>p.done&&p.disc!=="race"&&p.disc!=="rest").length;
-  const el=document.createElement("div");
+  var total=w.planned.filter(function(p){return p.disc!=="race"&&p.disc!=="rest";}).length;
+  var done=w.planned.filter(function(p){return p.done&&p.disc!=="race"&&p.disc!=="rest";}).length;
+  var el=document.createElement("div");
   el.className="week"+(w.isRace?" race":"")+(w.collapsed?" collapsed":"");
-  el.style.setProperty("--rail",PHASE[w.phase]||"var(--rest)");el.dataset.week=w.id;
-  const head=document.createElement("div");head.className="wk-head";head.dataset.action="collapse";
-  head.innerHTML='<span class="wk-date">'+w.date+'</span><span class="phase-tag" style="background:'+(PHASE[w.phase]||'var(--rest)')+'">'+w.phase+'</span><span class="wk-meta">'+(total?'<span class="wk-progress">'+done+'/'+total+'</span>':'')+'<button class="caret" aria-label="Collapse week">\u25BE</button></span>';
+  el.style.setProperty("--rail",PHASE[w.phase]||"var(--rest)");
+  el.dataset.week=w.id;
+
+  /* header */
+  var head=document.createElement("div");head.className="wk-head";head.dataset.action="collapse";
+  head.innerHTML='<span class="wk-date">'+w.date+'</span><span class="phase-tag" style="background:'+(PHASE[w.phase]||"var(--rest)")+'">'+w.phase+'</span><span class="wk-meta">'+(total?'<span class="wk-progress">'+done+'/'+total+'</span>':'')+'<button class="caret" aria-label="Toggle week">&#9662;</button></span>';
   el.appendChild(head);
-  const body=document.createElement("div");body.className="wk-body";
-  const focus=document.createElement("div");focus.className="focus";focus.contentEditable="true";focus.spellcheck=false;focus.dataset.field="focus";focus.textContent=w.focus;body.appendChild(focus);
-  const pl=document.createElement("div");pl.className="col-label";pl.textContent="Planned — tap to check off";body.appendChild(pl);
-  const list=document.createElement("div");list.className="plan";w.planned.forEach(p=>list.appendChild(plannedRow(p)));body.appendChild(list);
-  if(!w.isRace){const add=document.createElement("button");add.className="add-sess";add.dataset.action="add-sess";add.textContent="+ session";body.appendChild(add);}
-  if(w.isRace){const rt=document.createElement("div");rt.className="race-targets";rt.innerHTML="<b>It's a benchmark, not a race</b> — no taper, hit it on training legs. Reference off your Alghero splits: swim ~40 min, bike ~2:40, run ~1:40. Go a little harder than 70.3 effort and note where it cracks.";body.appendChild(rt);}
-  const two=document.createElement("div");two.className="two";
+
+  /* body */
+  var body=document.createElement("div");body.className="wk-body";
+
+  var focus=document.createElement("div");focus.className="focus";focus.contentEditable="true";focus.spellcheck=false;focus.dataset.field="focus";focus.textContent=w.focus;
+  body.appendChild(focus);
+
+  /* planned sessions */
+  var pl=document.createElement("div");pl.className="col-label";pl.textContent="Planned — tap to check off";body.appendChild(pl);
+  var list=document.createElement("div");list.className="plan";
+  w.planned.forEach(function(p){list.appendChild(plannedRow(p));});
+  body.appendChild(list);
+  if(!w.isRace){var add=document.createElement("button");add.className="add-sess";add.dataset.action="add-sess";add.textContent="+ session";body.appendChild(add);}
+
+  /* sim callout */
+  if(w.isRace){
+    var rt=document.createElement("div");rt.className="race-targets";
+    rt.innerHTML="<b>Benchmark training day, not a race</b> — no taper, hit it on training legs. Reference: swim ~40 min, bike ~2:40, run ~1:40. Go a little harder than 70.3 effort and note where it cracks.";
+    body.appendChild(rt);
+  }
+
+  /* did + comments */
+  var two=document.createElement("div");two.className="two";
   two.appendChild(field("What I actually did",w.did,"did","e.g. Swim 2,000m 1,57 · ran the intervals @ 4,52…"));
   two.appendChild(field("My comments",w.comments,"comments","How the week felt, energy, sleep, niggles…"));
   body.appendChild(two);
-  const habits=w.habits||emptyHabits();
-  const hblock=document.createElement("div");hblock.className="habits";
-  ["smoking","drinking"].forEach(function(type){
-    const bl=document.createElement("div");bl.className="habit-block";
-    bl.innerHTML='<h4>'+(type==="smoking"?"🚬 Cigarettes":"🍺 Drinks")+'</h4>';
-    const rows=document.createElement("div");rows.className="day-rows";
-    DAYS.forEach(function(day){
-      const row=document.createElement("div");row.className="day-row";
-      const inp=document.createElement("input");inp.className="day-input";
-      inp.type="text";inp.placeholder="—";inp.value=habits[type][day]||"";
-      inp.dataset.field="habit";inp.dataset.type=type;inp.dataset.day=day;
-      inp.setAttribute("aria-label",day+" "+type);
-      row.innerHTML='<span class="day-label">'+day+'</span>';
-      row.appendChild(inp);rows.appendChild(row);
-    });
-    bl.appendChild(rows);hblock.appendChild(bl);
+
+  /* habits table */
+  var habits=w.habits||emptyHabits();
+  var hw=document.createElement("div");hw.className="habits-wrap";
+  var lbl=document.createElement("div");lbl.className="col-label";lbl.textContent="Smoking & drinking";
+  hw.appendChild(lbl);
+  var tbl=document.createElement("table");tbl.className="habits-table";
+  tbl.innerHTML='<thead><tr><th>Day</th><th>&#128684; Cigarettes</th><th>&#127866; Drinks</th></tr></thead>';
+  var tb=document.createElement("tbody");
+  DAYS.forEach(function(day){
+    var tr=document.createElement("tr");
+    var dayHabits=habits[day]||{cigs:"",drinks:""};
+    var td0=document.createElement("td");td0.textContent=day;
+    var td1=document.createElement("td");
+    var i1=document.createElement("input");i1.className="habit-inp";i1.type="text";i1.placeholder="—";
+    i1.value=dayHabits.cigs||"";i1.dataset.field="habit";i1.dataset.htype="cigs";i1.dataset.day=day;
+    i1.setAttribute("aria-label",day+" cigarettes");td1.appendChild(i1);
+    var td2=document.createElement("td");
+    var i2=document.createElement("input");i2.className="habit-inp";i2.type="text";i2.placeholder="—";
+    i2.value=dayHabits.drinks||"";i2.dataset.field="habit";i2.dataset.htype="drinks";i2.dataset.day=day;
+    i2.setAttribute("aria-label",day+" drinks");td2.appendChild(i2);
+    tr.appendChild(td0);tr.appendChild(td1);tr.appendChild(td2);tb.appendChild(tr);
   });
-  body.appendChild(hblock);
-  const wrapc=document.createElement("div");wrapc.style.marginTop="12px";
+  tbl.appendChild(tb);hw.appendChild(tbl);body.appendChild(hw);
+
+  /* remove week */
+  var wrapc=document.createElement("div");wrapc.style.marginTop="14px";
   wrapc.innerHTML='<button class="add-sess" data-action="del-week" style="border-style:solid;border-color:var(--line)">Remove week</button>';
   body.appendChild(wrapc);
+
   el.appendChild(body);return el;
 }
+
 function plannedRow(p){
-  const r=document.createElement("div");r.className="pitem"+(p.done?" done":"");r.dataset.item=p.id;
-  const d=DISC[p.disc]||DISC.rest;
-  r.innerHTML='<input type="checkbox" class="check" '+(p.done?"checked":"")+' data-action="toggle" aria-label="Mark done"><button class="chip" data-action="cycle" style="background:'+d.c+'" title="Tap to change discipline">'+d.label+'</button><input class="ptext" data-field="ptext" value="'+esc(p.text)+'"><button class="del" data-action="del-sess" aria-label="Delete session">\u00D7</button>';
+  var r=document.createElement("div");r.className="pitem"+(p.done?" done":"");r.dataset.item=p.id;
+  var d=DISC[p.disc]||DISC.rest;
+  r.innerHTML='<input type="checkbox" class="check"'+(p.done?' checked':'')+' data-action="toggle" aria-label="Mark done"><button class="chip" data-action="cycle" style="background:'+d.c+'" title="Change discipline">'+d.label+'</button><input class="ptext" data-field="ptext" value="'+esc(p.text)+'"><button class="del" data-action="del-sess" aria-label="Delete">\u00d7</button>';
   return r;
 }
 function field(label,val,key,ph){
-  const w=document.createElement("div");w.innerHTML='<div class="col-label">'+label+'</div>';
-  const ta=document.createElement("textarea");ta.dataset.field=key;ta.placeholder=ph;ta.value=val||"";
-  ta.addEventListener("input",()=>autoGrow(ta));w.appendChild(ta);requestAnimationFrame(()=>autoGrow(ta));return w;
+  var w=document.createElement("div");
+  w.innerHTML='<div class="col-label">'+label+'</div>';
+  var ta=document.createElement("textarea");ta.dataset.field=key;ta.placeholder=ph;ta.value=val||"";
+  ta.addEventListener("input",function(){autoGrow(ta);});w.appendChild(ta);
+  requestAnimationFrame(function(){autoGrow(ta);});return w;
 }
-function autoGrow(ta){ta.style.height="auto";ta.style.height=ta.scrollHeight+"px"}
-function esc(s){return(s||"").replace(/"/g,"&quot;").replace(/</g,"&lt;")}
+function autoGrow(ta){ta.style.height="auto";ta.style.height=ta.scrollHeight+"px";}
+function esc(s){return(s||"").replace(/"/g,"&quot;").replace(/</g,"&lt;");}
+
 function updateStats(){
-  const tally={swim:0,bike:0,run:0,strength:0,brick:0};let tot=0,don=0;
-  state.weeks.forEach(w=>w.planned.forEach(p=>{if(p.disc==="race"||p.disc==="rest")return;tot++;if(p.done){don++;if(tally[p.disc]!==undefined)tally[p.disc]++}}));
-  const pct=tot?Math.round(don/tot*100):0;
-  document.getElementById("ring").style.setProperty("--p",pct);document.getElementById("ringPct").textContent=pct+"%";
-  const dc=document.getElementById("discCounts");dc.innerHTML="";
+  var tally={swim:0,bike:0,run:0,strength:0,brick:0};var tot=0,don=0;
+  state.weeks.forEach(function(w){w.planned.forEach(function(p){
+    if(p.disc==="race"||p.disc==="rest")return;tot++;
+    if(p.done){don++;if(tally[p.disc]!==undefined)tally[p.disc]++;}
+  });});
+  var pct=tot?Math.round(don/tot*100):0;
+  document.getElementById("ring").style.setProperty("--p",pct);
+  document.getElementById("ringPct").textContent=pct+"%";
+  var dc=document.getElementById("discCounts");dc.innerHTML="";
   [["swim","Swim"],["bike","Bike"],["run","Run"],["strength","Strength"],["brick","Brick"]].forEach(function(x){
-    const el=document.createElement("div");el.className="dc";
-    el.innerHTML='<span class="dot" style="background:'+DISC[x[0]].c+'"></span><b>'+tally[x[0]]+'</b><small>'+x[1]+'</small>';dc.appendChild(el);});
-}
-function updateCountdown(){
-  const d=new Date(state.raceDate+"T00:00:00");const now=new Date();now.setHours(0,0,0,0);
-  const days=Math.round((d-now)/864e5);document.getElementById("cdNum").textContent=isNaN(days)?"\u2014":(days>=0?days:"\u2014");
+    var el=document.createElement("div");el.className="dc";
+    el.innerHTML='<span class="dot" style="background:'+DISC[x[0]].c+'"></span><b>'+tally[x[0]]+'</b><small>'+x[1]+'</small>';
+    dc.appendChild(el);
+  });
 }
 function renderFootnote(){
-  document.getElementById("footnote").innerHTML="An ambitious guideline, not a cage — run, swim and strength are the priorities, with a hard <b>150k+ bike floor every week</b>. Everything you type saves automatically"+(storageOK?" and stays here when you come back.":" for this session.")+" Tap a discipline chip to recolour a session, check sessions off as you go, double-tap a date or phase tag to rename it, and use <b>+ Add a week</b> to keep the project rolling. The honest part: this only works if you sleep, fuel the big sessions, and actually take the deload weeks — back off when you're genuinely sick rather than pushing through like the log shows you sometimes do.";
+  document.getElementById("footnote").innerHTML="An ambitious guideline, not a cage — run, swim and strength are the priorities, with a hard <b>150k+ bike floor every week</b>. Everything saves in your browser automatically and is still here when you come back. Tap a discipline chip to recolour a session, check sessions off as you go, double-tap a date or phase tag to rename it, and use <b>+ Add a week</b> to keep the project rolling indefinitely.";
 }
 
-function weekOf(id){return state.weeks.find(w=>w.id===id)}
+/* ---------- events ---------- */
+function weekOf(id){return state.weeks.find(function(w){return w.id===id;});}
+
 document.addEventListener("click",function(e){
-  const act=e.target.closest("[data-action]");if(!act)return;const a=act.dataset.action;
-  const weekEl=act.closest("[data-week]");const w=weekEl&&weekOf(weekEl.dataset.week);
-  if(a==="collapse"){if(e.target.closest(".ptext,.del,.chip,.check"))return;if(w){w.collapsed=!w.collapsed;weekEl.classList.toggle("collapsed");schedule();}}
-  else if(a==="toggle"){const it=w.planned.find(p=>p.id===act.closest("[data-item]").dataset.item);it.done=act.checked;act.closest(".pitem").classList.toggle("done",it.done);updateStats();updateWkProgress(weekEl,w);schedule();}
-  else if(a==="cycle"){const row=act.closest("[data-item]");const it=w.planned.find(p=>p.id===row.dataset.item);let i=CYCLE.indexOf(it.disc);it.disc=CYCLE[(i+1)%CYCLE.length];const d=DISC[it.disc];act.style.background=d.c;act.textContent=d.label;updateStats();updateWkProgress(weekEl,w);schedule();}
-  else if(a==="del-sess"){const row=act.closest("[data-item]");w.planned=w.planned.filter(p=>p.id!==row.dataset.item);row.remove();updateStats();updateWkProgress(weekEl,w);schedule();}
-  else if(a==="add-sess"){w.planned.push(P("run","New session"));weekEl.replaceWith(weekCard(w));updateStats();schedule();}
-  else if(a==="del-week"){if(confirm("Remove the week of "+w.date+"? Your notes for it will be deleted.")){state.weeks=state.weeks.filter(x=>x.id!==w.id);renderWeeks();renderTimeline();updateStats();schedule();}}
+  var act=e.target.closest("[data-action]");if(!act)return;
+  var a=act.dataset.action;
+  var weekEl=act.closest("[data-week]");var w=weekEl&&weekOf(weekEl.dataset.week);
+  if(a==="collapse"){
+    if(e.target.closest(".ptext,.del,.chip,.check,.habit-inp,textarea,[contenteditable]"))return;
+    if(w){w.collapsed=!w.collapsed;weekEl.classList.toggle("collapsed");schedule();}
+  }else if(a==="toggle"){
+    var it=w.planned.find(function(p){return p.id===act.closest("[data-item]").dataset.item;});
+    it.done=act.checked;act.closest(".pitem").classList.toggle("done",it.done);
+    updateStats();updateWkProgress(weekEl,w);schedule();
+  }else if(a==="cycle"){
+    var row=act.closest("[data-item]");
+    var it2=w.planned.find(function(p){return p.id===row.dataset.item;});
+    var i=CYCLE.indexOf(it2.disc);it2.disc=CYCLE[(i+1)%CYCLE.length];
+    var d=DISC[it2.disc];act.style.background=d.c;act.textContent=d.label;
+    updateStats();updateWkProgress(weekEl,w);schedule();
+  }else if(a==="del-sess"){
+    var row2=act.closest("[data-item]");w.planned=w.planned.filter(function(p){return p.id!==row2.dataset.item;});
+    row2.remove();updateStats();updateWkProgress(weekEl,w);schedule();
+  }else if(a==="add-sess"){
+    w.planned.push(P("run","New session"));weekEl.replaceWith(weekCard(w));updateStats();schedule();
+  }else if(a==="del-week"){
+    if(confirm("Remove the week of "+w.date+"? Your notes will be deleted.")){
+      state.weeks=state.weeks.filter(function(x){return x.id!==w.id;});
+      renderWeeks();renderTimeline();updateStats();schedule();
+    }
+  }
 });
+
 function updateWkProgress(weekEl,w){
-  const total=w.planned.filter(p=>p.disc!=="race"&&p.disc!=="rest").length;
-  const done=w.planned.filter(p=>p.done&&p.disc!=="race"&&p.disc!=="rest").length;
-  const pr=weekEl.querySelector(".wk-progress");if(pr)pr.textContent=done+"/"+total;
+  var total=w.planned.filter(function(p){return p.disc!=="race"&&p.disc!=="rest";}).length;
+  var done=w.planned.filter(function(p){return p.done&&p.disc!=="race"&&p.disc!=="rest";}).length;
+  var pr=weekEl.querySelector(".wk-progress");if(pr)pr.textContent=done+"/"+total;
 }
+
 document.addEventListener("input",function(e){
-  const f=e.target.closest("[data-field]");if(!f)return;const key=f.dataset.field;
+  var f=e.target.closest("[data-field]");if(!f)return;
+  var key=f.dataset.field;
   if(key==="title"){state.title=f.textContent;schedule();return;}
-  const weekEl=f.closest("[data-week]");if(!weekEl)return;const w=weekOf(weekEl.dataset.week);if(!w)return;
-  if(key==="ptext"){const it=w.planned.find(p=>p.id===f.closest("[data-item]").dataset.item);it.text=f.value;}
-  else if(key==="focus"){w.focus=f.textContent;}
-  else if(key==="habit"){if(!w.habits)w.habits=emptyHabits();w.habits[f.dataset.type][f.dataset.day]=f.value;}
-  else{w[key]=f.value;}
+  var weekEl=f.closest("[data-week]");if(!weekEl)return;
+  var w=weekOf(weekEl.dataset.week);if(!w)return;
+  if(key==="ptext"){
+    var it=w.planned.find(function(p){return p.id===f.closest("[data-item]").dataset.item;});it.text=f.value;
+  }else if(key==="focus"){
+    w.focus=f.textContent;
+  }else if(key==="habit"){
+    if(!w.habits)w.habits=emptyHabits();
+    if(!w.habits[f.dataset.day])w.habits[f.dataset.day]={cigs:"",drinks:""};
+    w.habits[f.dataset.day][f.dataset.htype]=f.value;
+  }else{
+    w[key]=f.value;
+  }
   schedule();
 });
-document.getElementById("raceName").addEventListener("input",function(e){state.raceName=e.target.value;schedule()});
-document.getElementById("raceDate").addEventListener("input",function(e){state.raceDate=e.target.value;updateCountdown();schedule()});
+
 document.getElementById("addWeek").addEventListener("click",function(){
-  state.weeks.push({id:uid(),date:"New",phase:"Build",collapsed:false,focus:"Double-tap the date and phase tag to edit. Add your sessions below — keep the 150k bike floor.",planned:[P("swim","Swim"),P("bike","Bike"),P("run","Run"),P("strength","Strength")],did:"",comments:"",habits:emptyHabits()});
-  renderWeeks();renderTimeline();updateStats();schedule();window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
+  state.weeks.push({id:uid(),date:"New",phase:"Build",collapsed:false,
+    focus:"Double-tap the date and phase tag to edit. Keep the 150k bike floor.",
+    planned:[P("swim","Swim"),P("bike","Bike"),P("run","Run"),P("strength","Strength")],
+    did:"",comments:"",habits:emptyHabits()});
+  renderWeeks();renderTimeline();updateStats();schedule();
+  window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
 });
-document.getElementById("resetPlan").addEventListener("click",async function(){
-  if(confirm("Reset to the original plan? This erases all your logged activities, comments and added weeks.")){state=defaultState();await save();render();}
+
+document.getElementById("resetPlan").addEventListener("click",function(){
+  if(confirm("Reset to the original plan? This erases all your logged activities, comments and added weeks.")){
+    state=defaultState();save();render();
+  }
 });
+
 document.addEventListener("dblclick",function(e){
-  const dateEl=e.target.closest(".wk-date");const phEl=e.target.closest(".phase-tag");
-  const weekEl=e.target.closest("[data-week]");if(!weekEl)return;const w=weekOf(weekEl.dataset.week);
-  if(dateEl){const v=prompt("Week label / date:",w.date);if(v!=null){w.date=v;renderWeeks();renderTimeline();schedule();}}
-  else if(phEl){const v=prompt("Phase (Base, Build, Build 2, Brick Block, Peak, Deload, Build 3, Benchmark, Reload, Sim Wk):",w.phase);if(v!=null){w.phase=v;renderWeeks();renderTimeline();schedule();}}
+  var weekEl=e.target.closest("[data-week]");if(!weekEl)return;
+  var w=weekOf(weekEl.dataset.week);
+  if(e.target.closest(".wk-date")){
+    var v=prompt("Week label / date:",w.date);if(v!=null){w.date=v;renderWeeks();renderTimeline();schedule();}
+  }else if(e.target.closest(".phase-tag")){
+    var v2=prompt("Phase:",w.phase);if(v2!=null){w.phase=v2;renderWeeks();renderTimeline();schedule();}
+  }
 });
-load().then(render);
+
+load();render();
 </script>
