@@ -1,5 +1,4 @@
 <!doctype html>
-
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Big Build — Stefano</title>
@@ -106,8 +105,22 @@
   .sync-status{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);margin-top:8px;min-height:16px}
   .sync-status.err{color:var(--run)}
   :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  /* auth gate */
+  .auth-gate{position:fixed;inset:0;background:var(--bg);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:26px 26px;display:flex;align-items:center;justify-content:center;z-index:100}
+  .auth-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:40px 36px;max-width:360px;width:90%;text-align:center}
+  .auth-card h2{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:24px;letter-spacing:-.02em;margin:0 0 6px}
+  .auth-card p{color:var(--ink-soft);font-size:14px;margin:0 0 28px}
+  .google-btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:13px 20px;border:1px solid var(--line-strong);border-radius:10px;background:#fff;cursor:pointer;font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:15px;color:var(--ink);transition:box-shadow .15s}
+  .google-btn:hover{box-shadow:0 2px 12px rgba(21,25,31,.12)}
+  .google-btn svg{flex:none}
+  .auth-error{margin-top:14px;font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--run);min-height:18px}
+  .user-bar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .user-bar img{width:28px;height:28px;border-radius:50%;border:1px solid var(--line)}
+  .user-bar span{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-soft);flex:1}
+  .signout-btn{font-family:"JetBrains Mono",monospace;font-size:11px;border:1px solid var(--line-strong);background:none;border-radius:8px;padding:5px 10px;cursor:pointer;color:var(--ink-soft)}
+  .signout-btn:hover{border-color:var(--ink);color:var(--ink)}
 </style>
- 
+
 <div class="wrap">
   <header>
     <div class="topline">
@@ -115,6 +128,11 @@
         <div class="eyebrow">Triathlon training log · Stefano</div>
         <h1 contenteditable data-field="title" spellcheck="false">The Big Build</h1>
       </div>
+    </div>
+    <div class="user-bar" id="userBar" style="display:none">
+      <img id="userAvatar" src="" alt="">
+      <span id="userEmail"></span>
+      <button class="signout-btn" id="signOutBtn">Sign out</button>
     </div>
     <div class="stats">
       <div class="ring" id="ring"><i id="ringPct">0%</i></div>
@@ -126,22 +144,35 @@
     <div class="sync-status" id="syncStatus">Connecting…</div>
     <div class="timeline-wrap"><div class="timeline" id="timeline"></div></div>
   </header>
- 
+
   <div class="weeks" id="weeks"></div>
- 
+
   <div class="controls">
     <button class="act" id="addWeek">+ Add a week</button>
     <button class="act ghost" id="resetPlan">Reset to original plan</button>
   </div>
   <p class="note" id="footnote"></p>
 </div>
- 
+
+<div class="auth-gate" id="authGate">
+  <div class="auth-card">
+    <h2>The Big Build</h2>
+    <p>Stefano's training log — sign in to continue</p>
+    <button class="google-btn" id="signInBtn">
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+      Sign in with Google
+    </button>
+    <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
 <div class="save-flash" id="flash">Saved ✓</div>
- 
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
- 
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+
 const firebaseConfig = {
   apiKey: "AIzaSyDBgcPtQIwPXxB_uC-mPlre0cExO00w4A0",
   authDomain: "training-log-stefano.firebaseapp.com",
@@ -150,16 +181,17 @@ const firebaseConfig = {
   messagingSenderId: "331634278951",
   appId: "1:331634278951:web:b6635ed280f528ae878402"
 };
-const _app = initializeApp(firebaseConfig);
-const _db  = getFirestore(_app);
-const _DOC = doc(_db, "traininglog", "state");
- 
+const _app  = initializeApp(firebaseConfig);
+const _db   = getFirestore(_app);
+const _auth = getAuth(_app);
+const _DOC  = doc(_db, "traininglog", "state");
+
 const DISC={swim:{c:"var(--swim)",label:"Swim"},bike:{c:"var(--bike)",label:"Bike"},run:{c:"var(--run)",label:"Run"},strength:{c:"var(--strength)",label:"Stren"},brick:{c:"var(--brick)",label:"Brick"},race:{c:"var(--race)",label:"Sim"},rest:{c:"var(--rest)",label:"Rest"}};
 const PHASE={"Re-entry":"var(--rest)","Base":"var(--swim)","Build":"var(--bike)","Sim Wk":"var(--race)","Sim":"var(--race)","Reload":"var(--strength)","Build 2":"var(--bike)","Brick Block":"var(--brick)","Peak":"var(--run)","Deload":"var(--rest)","Build 3":"var(--swim)","Benchmark":"var(--brick)"};
 const CYCLE=["swim","bike","run","brick","strength","rest"];
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 let state,saveTimer;
- 
+
 function uid(){return Math.random().toString(36).slice(2,9)}
 function P(disc,text,done){return{id:uid(),disc,text,done:!!done}}
 function emptyHabits(){
@@ -167,7 +199,7 @@ function emptyHabits(){
   DAYS.forEach(function(d){h[d]={cigs:"",drinks:""};});
   return h;
 }
- 
+
 /* ---------- Firebase persistence ---------- */
 function syncStatus(msg,err){
   var el=document.getElementById("syncStatus");
@@ -211,7 +243,7 @@ function save(silent){
 }
 function schedule(){clearTimeout(saveTimer);saveTimer=setTimeout(function(){_persist();},600);}
 function flash(){var f=document.getElementById("flash");f.textContent="Saved \u2713";f.classList.add("show");clearTimeout(f._t);f._t=setTimeout(function(){f.classList.remove("show");},1100);}
- 
+
 /* ---------- default plan ---------- */
 function defaultState(){
   return {
@@ -268,7 +300,7 @@ function defaultState(){
     ]
   };
 }
- 
+
 /* ---------- render ---------- */
 function render(){
   var t=document.querySelector('[data-field="title"]');
@@ -285,7 +317,7 @@ function renderTimeline(){
   });
 }
 function renderWeeks(){var c=document.getElementById("weeks");c.innerHTML="";state.weeks.forEach(function(w){c.appendChild(weekCard(w));});}
- 
+
 function weekCard(w){
   var total=w.planned.filter(function(p){return p.disc!=="race"&&p.disc!=="rest";}).length;
   var done=w.planned.filter(function(p){return p.done&&p.disc!=="race"&&p.disc!=="rest";}).length;
@@ -293,38 +325,38 @@ function weekCard(w){
   el.className="week"+(w.isRace?" race":"")+(w.collapsed?" collapsed":"");
   el.style.setProperty("--rail",PHASE[w.phase]||"var(--rest)");
   el.dataset.week=w.id;
- 
+
   /* header */
   var head=document.createElement("div");head.className="wk-head";head.dataset.action="collapse";
   head.innerHTML='<span class="wk-date">'+w.date+'</span><span class="phase-tag" style="background:'+(PHASE[w.phase]||"var(--rest)")+'">'+w.phase+'</span><span class="wk-meta">'+(total?'<span class="wk-progress">'+done+'/'+total+'</span>':'')+'<button class="caret" aria-label="Toggle week">&#9662;</button></span>';
   el.appendChild(head);
- 
+
   /* body */
   var body=document.createElement("div");body.className="wk-body";
- 
+
   var focus=document.createElement("div");focus.className="focus";focus.contentEditable="true";focus.spellcheck=false;focus.dataset.field="focus";focus.textContent=w.focus;
   body.appendChild(focus);
- 
+
   /* planned sessions */
   var pl=document.createElement("div");pl.className="col-label";pl.textContent="Planned — tap to check off";body.appendChild(pl);
   var list=document.createElement("div");list.className="plan";
   w.planned.forEach(function(p){list.appendChild(plannedRow(p));});
   body.appendChild(list);
   if(!w.isRace){var add=document.createElement("button");add.className="add-sess";add.dataset.action="add-sess";add.textContent="+ session";body.appendChild(add);}
- 
+
   /* sim callout */
   if(w.isRace){
     var rt=document.createElement("div");rt.className="race-targets";
     rt.innerHTML="<b>Benchmark training day, not a race</b> — no taper, hit it on training legs. Reference: swim ~40 min, bike ~2:40, run ~1:40. Go a little harder than 70.3 effort and note where it cracks.";
     body.appendChild(rt);
   }
- 
+
   /* did + comments */
   var two=document.createElement("div");two.className="two";
   two.appendChild(field("What I actually did",w.did,"did","e.g. Swim 2,000m 1,57 · ran the intervals @ 4,52…"));
   two.appendChild(field("My comments",w.comments,"comments","How the week felt, energy, sleep, niggles…"));
   body.appendChild(two);
- 
+
   /* habits table */
   var habits=w.habits||emptyHabits();
   var hw=document.createElement("div");hw.className="habits-wrap";
@@ -348,15 +380,15 @@ function weekCard(w){
     tr.appendChild(td0);tr.appendChild(td1);tr.appendChild(td2);tb.appendChild(tr);
   });
   tbl.appendChild(tb);hw.appendChild(tbl);body.appendChild(hw);
- 
+
   /* remove week */
   var wrapc=document.createElement("div");wrapc.style.marginTop="14px";
   wrapc.innerHTML='<button class="add-sess" data-action="del-week" style="border-style:solid;border-color:var(--line)">Remove week</button>';
   body.appendChild(wrapc);
- 
+
   el.appendChild(body);return el;
 }
- 
+
 function plannedRow(p){
   var r=document.createElement("div");r.className="pitem"+(p.done?" done":"");r.dataset.item=p.id;
   var d=DISC[p.disc]||DISC.rest;
@@ -372,7 +404,7 @@ function field(label,val,key,ph){
 }
 function autoGrow(ta){ta.style.height="auto";ta.style.height=ta.scrollHeight+"px";}
 function esc(s){return(s||"").replace(/"/g,"&quot;").replace(/</g,"&lt;");}
- 
+
 function updateStats(){
   var tally={swim:0,bike:0,run:0,strength:0,brick:0};var tot=0,don=0;
   state.weeks.forEach(function(w){w.planned.forEach(function(p){
@@ -392,10 +424,10 @@ function updateStats(){
 function renderFootnote(){
   document.getElementById("footnote").innerHTML="An ambitious guideline, not a cage — run, swim and strength are the priorities, with a hard <b>150k+ bike floor every week</b>. Everything saves in your browser automatically and is still here when you come back. Tap a discipline chip to recolour a session, check sessions off as you go, double-tap a date or phase tag to rename it, and use <b>+ Add a week</b> to keep the project rolling indefinitely.";
 }
- 
+
 /* ---------- events ---------- */
 function weekOf(id){return state.weeks.find(function(w){return w.id===id;});}
- 
+
 document.addEventListener("click",function(e){
   var act=e.target.closest("[data-action]");if(!act)return;
   var a=act.dataset.action;
@@ -425,13 +457,13 @@ document.addEventListener("click",function(e){
     }
   }
 });
- 
+
 function updateWkProgress(weekEl,w){
   var total=w.planned.filter(function(p){return p.disc!=="race"&&p.disc!=="rest";}).length;
   var done=w.planned.filter(function(p){return p.done&&p.disc!=="race"&&p.disc!=="rest";}).length;
   var pr=weekEl.querySelector(".wk-progress");if(pr)pr.textContent=done+"/"+total;
 }
- 
+
 document.addEventListener("input",function(e){
   var f=e.target.closest("[data-field]");if(!f)return;
   var key=f.dataset.field;
@@ -451,7 +483,7 @@ document.addEventListener("input",function(e){
   }
   schedule();
 });
- 
+
 document.getElementById("addWeek").addEventListener("click",function(){
   state.weeks.push({id:uid(),date:"New",phase:"Build",collapsed:false,
     focus:"Double-tap the date and phase tag to edit. Keep the 150k bike floor.",
@@ -460,13 +492,13 @@ document.getElementById("addWeek").addEventListener("click",function(){
   renderWeeks();renderTimeline();updateStats();schedule();
   window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
 });
- 
+
 document.getElementById("resetPlan").addEventListener("click",function(){
   if(confirm("Reset to the original plan? This erases all your logged activities, comments and added weeks.")){
     state=defaultState();save();render();
   }
 });
- 
+
 document.addEventListener("dblclick",function(e){
   var weekEl=e.target.closest("[data-week]");if(!weekEl)return;
   var w=weekOf(weekEl.dataset.week);
@@ -476,6 +508,37 @@ document.addEventListener("dblclick",function(e){
     var v2=prompt("Phase:",w.phase);if(v2!=null){w.phase=v2;renderWeeks();renderTimeline();schedule();}
   }
 });
- 
-load().then(function(){render();});
+
+/* ---------- auth gate ---------- */
+var _authed = false;
+
+document.getElementById("signInBtn").addEventListener("click", function(){
+  document.getElementById("authError").textContent = "";
+  signInWithPopup(_auth, new GoogleAuthProvider()).catch(function(e){
+    document.getElementById("authError").textContent = e.message;
+  });
+});
+
+document.getElementById("signOutBtn").addEventListener("click", function(){
+  signOut(_auth);
+});
+
+onAuthStateChanged(_auth, function(user){
+  var gate = document.getElementById("authGate");
+  var bar  = document.getElementById("userBar");
+  if(user){
+    gate.style.display = "none";
+    bar.style.display  = "flex";
+    document.getElementById("userAvatar").src   = user.photoURL || "";
+    document.getElementById("userEmail").textContent = user.displayName || user.email;
+    if(!_authed){
+      _authed = true;
+      load().then(function(){ render(); });
+    }
+  } else {
+    gate.style.display = "flex";
+    bar.style.display  = "none";
+    _authed = false;
+  }
+});
 </script>
