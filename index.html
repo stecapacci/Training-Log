@@ -384,10 +384,15 @@ async function fetchStravaActivities(){
       stravaToken=null;localStorage.removeItem("strava_token");showStravaBtn();return;
     }
     const json=await res.json();
-    console.log("Strava returned:",json.length,"activities");
-    if(json.length>0)console.log("First activity sample:",JSON.stringify(json[0]).slice(0,300));
+    console.log("Strava returned:",Array.isArray(json)?json.length:"NOT ARRAY",json);
+    if(!Array.isArray(json)){console.error("Unexpected Strava response:",json);syncStatus("Strava error: "+JSON.stringify(json),true);return;}
+    if(json.length>0){
+      const a=json[0];
+      console.log("First activity keys:",Object.keys(a));
+      console.log("sport_type:",a.sport_type,"distance:",a.distance,"moving_time:",a.moving_time,"start_date_local:",a.start_date_local,"total_elevation_gain:",a.total_elevation_gain,"average_heartrate:",a.average_heartrate,"suffer_score:",a.suffer_score,"weighted_average_watts:",a.weighted_average_watts);
+    }
     stravaActivities=json;
-    syncStatus("Synced ✓ · "+json.length+" Strava activities loaded");
+    syncStatus("Synced ✓ · "+json.length+" activities");
     updateTrends();
     renderSparkline();
     renderWeeks();
@@ -431,6 +436,13 @@ function activitiesForWeek(dateStr){
 }
 
 /* ── trends dashboard ── */
+function acts_this_week_count(){
+  const now=new Date();const start=new Date(now);
+  const dow=start.getDay();const diff=dow===0?-6:1-dow;
+  start.setDate(start.getDate()+diff);start.setHours(0,0,0,0);
+  const end=new Date(start);end.setDate(end.getDate()+7);
+  return stravaActivities.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date||"");return d>=start&&d<end;}).length;
+}
 function parseLocalDate(str){
   // parse "2026-06-11T06:22:59" as local time, not UTC
   if(!str)return new Date(0);
@@ -444,15 +456,21 @@ function weeklyTotals(weeksBack=0){
   const dow=start.getDay();const diff=dow===0?-6:1-dow;
   start.setDate(start.getDate()+diff-weeksBack*7);start.setHours(0,0,0,0);
   const end=new Date(start);end.setDate(end.getDate()+7);
-  const acts=stravaActivities.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date);return d>=start&&d<end;});
+  console.log("weeklyTotals weeksBack="+weeksBack,"start:",start.toDateString(),"end:",end.toDateString(),"total activities:",stravaActivities.length);
+  const acts=stravaActivities.filter(a=>{
+    const dateStr=a.start_date_local||a.start_date||"";
+    const d=parseLocalDate(dateStr);
+    return d>=start&&d<end;
+  });
+  console.log("  matched",acts.length,"activities for this window");
   let load=0,bike=0,run=0,swim=0,cal=0,runSec=0,runDist=0;
   acts.forEach(a=>{
-    load+=a.suffer_score||a.relative_effort||0;
-    bike+=(a.sport_type==="Ride"||a.sport_type==="VirtualRide")?a.distance||0:0;
-    run+=a.sport_type==="Run"?a.distance||0:0;
+    load+=a.suffer_score||a.weighted_average_watts||0;
+    bike+=(a.sport_type==="Ride"||a.sport_type==="VirtualRide"||a.sport_type==="EBikeRide")?a.distance||0:0;
+    run+=(a.sport_type==="Run"||a.sport_type==="TrailRun")?a.distance||0:0;
     swim+=a.sport_type==="Swim"?a.distance||0:0;
-    cal+=a.calories||a.kilojoules||0;
-    if(a.sport_type==="Run"){runSec+=a.moving_time||0;runDist+=a.distance||0;}
+    cal+=a.kilojoules?Math.round(a.kilojoules*0.239):0;
+    if(a.sport_type==="Run"||a.sport_type==="TrailRun"){runSec+=a.moving_time||0;runDist+=a.distance||0;}
   });
   return{load,bike:bike/1000,run:run/1000,swim,cal,runPace:runDist>0?fmtPace(runDist,runSec):"—"};
 }
@@ -469,7 +487,8 @@ function updateTrends(){
     const tv=document.getElementById("tv-"+id);if(tv)tv.textContent=val;
     const ts=document.getElementById("ts-"+id);if(ts)ts.textContent=sub;
   };
-  set("load",Math.round(curr.load),`vs ${Math.round(prev.load)} last week ${trendArrow(curr.load,prev.load)}`,trendClass(curr.load,prev.load));
+  const loadVal=curr.load>0?Math.round(curr.load):acts_this_week_count();
+  set("load",Math.round(curr.load)||"—",curr.load>0?`vs ${Math.round(prev.load)} last week ${trendArrow(curr.load,prev.load)}`:"suffer score",trendClass(curr.load,prev.load));
   set("bike",curr.bike.toFixed(0),`vs ${prev.bike.toFixed(0)}km last week ${trendArrow(curr.bike,prev.bike)}`,trendClass(curr.bike,prev.bike));
   set("run",curr.run.toFixed(1),`vs ${prev.run.toFixed(1)}km last week ${trendArrow(curr.run,prev.run)}`,trendClass(curr.run,prev.run));
   set("swim",Math.round(curr.swim),`vs ${Math.round(prev.swim)}m last week ${trendArrow(curr.swim,prev.swim)}`,trendClass(curr.swim,prev.swim));
@@ -579,12 +598,12 @@ function weekCard(w){
       const bd=document.createElement("div");bd.className="act-body";
       const nm=document.createElement("div");nm.className="act-name";nm.textContent=a.name||sport;
       const meta=document.createElement("div");meta.className="act-meta";
-      const dist=a.distance||0;const time=a.moving_time||0;const elev=a.total_elevation_gain||a.elevation_gain||0;
-      const hr=a.average_heartrate;const cal=a.calories||a.kilojoules;
+      const dist=a.distance||0;const time=a.moving_time||0;const elev=a.total_elevation_gain||0;
+      const hr=a.average_heartrate||null;const cal=a.kilojoules?Math.round(a.kilojoules*0.239):0;
       const stats=[[fmtDist(dist,sport),"dist"],[fmtTime(time),"time"]];
       if(elev>10)stats.push([Math.round(elev)+"m","elev"]);
       if(hr)stats.push([Math.round(hr)+" bpm","HR"]);
-      if(cal)stats.push([Math.round(cal)+" kcal","cal"]);
+      if(cal>0)stats.push([cal+" kcal","cal"]);
       if(sport==="Run"&&dist>0&&time>0)stats.push([fmtPace(dist,time)+"/km","pace"]);
       if(sport==="Swim"&&dist>0&&time>0)stats.push([fmtPaceSwim(dist,time)+"/100m","pace"]);
       stats.forEach(([v,l])=>{const sp=document.createElement("span");sp.className="act-stat";sp.innerHTML=`<b>${v}</b> ${l}`;meta.appendChild(sp);});
