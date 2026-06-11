@@ -1,4 +1,5 @@
 <!doctype html>
+
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Big Build — Stefano</title>
@@ -102,9 +103,11 @@
   .save-flash.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .note{font-size:12.5px;color:var(--ink-soft);margin-top:24px;line-height:1.6}
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  .sync-status{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);margin-top:8px;min-height:16px}
+  .sync-status.err{color:var(--run)}
   :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 </style>
-
+ 
 <div class="wrap">
   <header>
     <div class="topline">
@@ -120,28 +123,43 @@
         <div class="disc-counts" id="discCounts"></div>
       </div>
     </div>
+    <div class="sync-status" id="syncStatus">Connecting…</div>
     <div class="timeline-wrap"><div class="timeline" id="timeline"></div></div>
   </header>
-
+ 
   <div class="weeks" id="weeks"></div>
-
+ 
   <div class="controls">
     <button class="act" id="addWeek">+ Add a week</button>
     <button class="act ghost" id="resetPlan">Reset to original plan</button>
   </div>
   <p class="note" id="footnote"></p>
 </div>
-
+ 
 <div class="save-flash" id="flash">Saved ✓</div>
-
-<script>
-const KEY="tri_log_state_v3";
+ 
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+ 
+const firebaseConfig = {
+  apiKey: "AIzaSyDBgcPtQIwPXxB_uC-mPlre0cExO00w4A0",
+  authDomain: "training-log-stefano.firebaseapp.com",
+  projectId: "training-log-stefano",
+  storageBucket: "training-log-stefano.firebasestorage.app",
+  messagingSenderId: "331634278951",
+  appId: "1:331634278951:web:b6635ed280f528ae878402"
+};
+const _app = initializeApp(firebaseConfig);
+const _db  = getFirestore(_app);
+const _DOC = doc(_db, "traininglog", "state");
+ 
 const DISC={swim:{c:"var(--swim)",label:"Swim"},bike:{c:"var(--bike)",label:"Bike"},run:{c:"var(--run)",label:"Run"},strength:{c:"var(--strength)",label:"Stren"},brick:{c:"var(--brick)",label:"Brick"},race:{c:"var(--race)",label:"Sim"},rest:{c:"var(--rest)",label:"Rest"}};
 const PHASE={"Re-entry":"var(--rest)","Base":"var(--swim)","Build":"var(--bike)","Sim Wk":"var(--race)","Sim":"var(--race)","Reload":"var(--strength)","Build 2":"var(--bike)","Brick Block":"var(--brick)","Peak":"var(--run)","Deload":"var(--rest)","Build 3":"var(--swim)","Benchmark":"var(--brick)"};
 const CYCLE=["swim","bike","run","brick","strength","rest"];
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 let state,saveTimer;
-
+ 
 function uid(){return Math.random().toString(36).slice(2,9)}
 function P(disc,text,done){return{id:uid(),disc,text,done:!!done}}
 function emptyHabits(){
@@ -149,23 +167,51 @@ function emptyHabits(){
   DAYS.forEach(function(d){h[d]={cigs:"",drinks:""};});
   return h;
 }
-
-/* ---------- localStorage persistence ---------- */
-function load(){
+ 
+/* ---------- Firebase persistence ---------- */
+function syncStatus(msg,err){
+  var el=document.getElementById("syncStatus");
+  if(!el)return;
+  el.textContent=msg;el.className="sync-status"+(err?" err":"");
+}
+async function load(){
+  syncStatus("Connecting…");
   try{
-    const raw=localStorage.getItem(KEY);
-    if(raw){state=JSON.parse(raw);return;}
-  }catch(e){}
-  state=defaultState();
-  save(true);
+    var snap=await getDoc(_DOC);
+    if(snap.exists()){
+      state=snap.data().payload;
+      syncStatus("Synced ✓");
+    }else{
+      state=defaultState();
+      await _persist(true);
+      syncStatus("Ready ✓");
+    }
+  }catch(e){
+    syncStatus("Offline — saved locally",true);
+    var raw=localStorage.getItem("tri_fb_fallback");
+    state=raw?JSON.parse(raw):defaultState();
+  }
+}
+async function _persist(silent){
+  try{
+    await setDoc(_DOC,{payload:state});
+    localStorage.setItem("tri_fb_fallback",JSON.stringify(state));
+    syncStatus("Synced ✓");
+    if(!silent)flash();
+  }catch(e){
+    localStorage.setItem("tri_fb_fallback",JSON.stringify(state));
+    syncStatus("Saved locally (offline?)",true);
+    if(!silent)flash();
+  }
 }
 function save(silent){
-  try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
-  if(!silent)flash();
+  // kept for reset button compatibility
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){_persist(silent);},600);
 }
-function schedule(){clearTimeout(saveTimer);saveTimer=setTimeout(function(){save();},450)}
-function flash(){var f=document.getElementById("flash");f.textContent="Saved \u2713";f.classList.add("show");clearTimeout(f._t);f._t=setTimeout(function(){f.classList.remove("show");},1100)}
-
+function schedule(){clearTimeout(saveTimer);saveTimer=setTimeout(function(){_persist();},600);}
+function flash(){var f=document.getElementById("flash");f.textContent="Saved \u2713";f.classList.add("show");clearTimeout(f._t);f._t=setTimeout(function(){f.classList.remove("show");},1100);}
+ 
 /* ---------- default plan ---------- */
 function defaultState(){
   return {
@@ -222,7 +268,7 @@ function defaultState(){
     ]
   };
 }
-
+ 
 /* ---------- render ---------- */
 function render(){
   var t=document.querySelector('[data-field="title"]');
@@ -239,7 +285,7 @@ function renderTimeline(){
   });
 }
 function renderWeeks(){var c=document.getElementById("weeks");c.innerHTML="";state.weeks.forEach(function(w){c.appendChild(weekCard(w));});}
-
+ 
 function weekCard(w){
   var total=w.planned.filter(function(p){return p.disc!=="race"&&p.disc!=="rest";}).length;
   var done=w.planned.filter(function(p){return p.done&&p.disc!=="race"&&p.disc!=="rest";}).length;
@@ -247,38 +293,38 @@ function weekCard(w){
   el.className="week"+(w.isRace?" race":"")+(w.collapsed?" collapsed":"");
   el.style.setProperty("--rail",PHASE[w.phase]||"var(--rest)");
   el.dataset.week=w.id;
-
+ 
   /* header */
   var head=document.createElement("div");head.className="wk-head";head.dataset.action="collapse";
   head.innerHTML='<span class="wk-date">'+w.date+'</span><span class="phase-tag" style="background:'+(PHASE[w.phase]||"var(--rest)")+'">'+w.phase+'</span><span class="wk-meta">'+(total?'<span class="wk-progress">'+done+'/'+total+'</span>':'')+'<button class="caret" aria-label="Toggle week">&#9662;</button></span>';
   el.appendChild(head);
-
+ 
   /* body */
   var body=document.createElement("div");body.className="wk-body";
-
+ 
   var focus=document.createElement("div");focus.className="focus";focus.contentEditable="true";focus.spellcheck=false;focus.dataset.field="focus";focus.textContent=w.focus;
   body.appendChild(focus);
-
+ 
   /* planned sessions */
   var pl=document.createElement("div");pl.className="col-label";pl.textContent="Planned — tap to check off";body.appendChild(pl);
   var list=document.createElement("div");list.className="plan";
   w.planned.forEach(function(p){list.appendChild(plannedRow(p));});
   body.appendChild(list);
   if(!w.isRace){var add=document.createElement("button");add.className="add-sess";add.dataset.action="add-sess";add.textContent="+ session";body.appendChild(add);}
-
+ 
   /* sim callout */
   if(w.isRace){
     var rt=document.createElement("div");rt.className="race-targets";
     rt.innerHTML="<b>Benchmark training day, not a race</b> — no taper, hit it on training legs. Reference: swim ~40 min, bike ~2:40, run ~1:40. Go a little harder than 70.3 effort and note where it cracks.";
     body.appendChild(rt);
   }
-
+ 
   /* did + comments */
   var two=document.createElement("div");two.className="two";
   two.appendChild(field("What I actually did",w.did,"did","e.g. Swim 2,000m 1,57 · ran the intervals @ 4,52…"));
   two.appendChild(field("My comments",w.comments,"comments","How the week felt, energy, sleep, niggles…"));
   body.appendChild(two);
-
+ 
   /* habits table */
   var habits=w.habits||emptyHabits();
   var hw=document.createElement("div");hw.className="habits-wrap";
@@ -302,15 +348,15 @@ function weekCard(w){
     tr.appendChild(td0);tr.appendChild(td1);tr.appendChild(td2);tb.appendChild(tr);
   });
   tbl.appendChild(tb);hw.appendChild(tbl);body.appendChild(hw);
-
+ 
   /* remove week */
   var wrapc=document.createElement("div");wrapc.style.marginTop="14px";
   wrapc.innerHTML='<button class="add-sess" data-action="del-week" style="border-style:solid;border-color:var(--line)">Remove week</button>';
   body.appendChild(wrapc);
-
+ 
   el.appendChild(body);return el;
 }
-
+ 
 function plannedRow(p){
   var r=document.createElement("div");r.className="pitem"+(p.done?" done":"");r.dataset.item=p.id;
   var d=DISC[p.disc]||DISC.rest;
@@ -326,7 +372,7 @@ function field(label,val,key,ph){
 }
 function autoGrow(ta){ta.style.height="auto";ta.style.height=ta.scrollHeight+"px";}
 function esc(s){return(s||"").replace(/"/g,"&quot;").replace(/</g,"&lt;");}
-
+ 
 function updateStats(){
   var tally={swim:0,bike:0,run:0,strength:0,brick:0};var tot=0,don=0;
   state.weeks.forEach(function(w){w.planned.forEach(function(p){
@@ -346,10 +392,10 @@ function updateStats(){
 function renderFootnote(){
   document.getElementById("footnote").innerHTML="An ambitious guideline, not a cage — run, swim and strength are the priorities, with a hard <b>150k+ bike floor every week</b>. Everything saves in your browser automatically and is still here when you come back. Tap a discipline chip to recolour a session, check sessions off as you go, double-tap a date or phase tag to rename it, and use <b>+ Add a week</b> to keep the project rolling indefinitely.";
 }
-
+ 
 /* ---------- events ---------- */
 function weekOf(id){return state.weeks.find(function(w){return w.id===id;});}
-
+ 
 document.addEventListener("click",function(e){
   var act=e.target.closest("[data-action]");if(!act)return;
   var a=act.dataset.action;
@@ -379,13 +425,13 @@ document.addEventListener("click",function(e){
     }
   }
 });
-
+ 
 function updateWkProgress(weekEl,w){
   var total=w.planned.filter(function(p){return p.disc!=="race"&&p.disc!=="rest";}).length;
   var done=w.planned.filter(function(p){return p.done&&p.disc!=="race"&&p.disc!=="rest";}).length;
   var pr=weekEl.querySelector(".wk-progress");if(pr)pr.textContent=done+"/"+total;
 }
-
+ 
 document.addEventListener("input",function(e){
   var f=e.target.closest("[data-field]");if(!f)return;
   var key=f.dataset.field;
@@ -405,7 +451,7 @@ document.addEventListener("input",function(e){
   }
   schedule();
 });
-
+ 
 document.getElementById("addWeek").addEventListener("click",function(){
   state.weeks.push({id:uid(),date:"New",phase:"Build",collapsed:false,
     focus:"Double-tap the date and phase tag to edit. Keep the 150k bike floor.",
@@ -414,13 +460,13 @@ document.getElementById("addWeek").addEventListener("click",function(){
   renderWeeks();renderTimeline();updateStats();schedule();
   window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});
 });
-
+ 
 document.getElementById("resetPlan").addEventListener("click",function(){
   if(confirm("Reset to the original plan? This erases all your logged activities, comments and added weeks.")){
     state=defaultState();save();render();
   }
 });
-
+ 
 document.addEventListener("dblclick",function(e){
   var weekEl=e.target.closest("[data-week]");if(!weekEl)return;
   var w=weekOf(weekEl.dataset.week);
@@ -430,6 +476,6 @@ document.addEventListener("dblclick",function(e){
     var v2=prompt("Phase:",w.phase);if(v2!=null){w.phase=v2;renderWeeks();renderTimeline();schedule();}
   }
 });
-
-load();render();
+ 
+load().then(function(){render();});
 </script>
