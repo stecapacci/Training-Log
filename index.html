@@ -336,8 +336,9 @@ async function stravaExchangeCode(code){
     const data=await res.json();
     if(data.access_token){
       stravaToken=data.access_token;
-      localStorage.setItem("strava_token",stravaToken);
+      localStorage.setItem("strava_token",data.access_token);
       localStorage.setItem("strava_token_exp",data.expires_at);
+      localStorage.setItem("strava_refresh_token",data.refresh_token||"");
       // clean up URL
       history.replaceState({},"",location.pathname);
       await fetchStravaActivities();
@@ -407,23 +408,34 @@ function weekBounds(dateStr){
 function activitiesForWeek(dateStr){
   const bounds=weekBounds(dateStr);if(!bounds)return[];
   return stravaActivities.filter(a=>{
-    const d=new Date(a.start_date_local||a.start_local||a.start_date);
+    const d=parseLocalDate(a.start_date_local||a.start_date);
     return d>=bounds.start && d<bounds.end;
   });
 }
 
 /* ── trends dashboard ── */
+function parseLocalDate(str){
+  // parse "2026-06-11T06:22:59" as local time, not UTC
+  if(!str)return new Date(0);
+  const m=str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]);
+  return new Date(str);
+}
 function weeklyTotals(weeksBack=0){
-  const now=new Date();const start=new Date(now);start.setDate(start.getDate()-start.getDay()+1-weeksBack*7);start.setHours(0,0,0,0);
+  const now=new Date();const start=new Date(now);
+  // Monday-based week
+  const dow=start.getDay();const diff=dow===0?-6:1-dow;
+  start.setDate(start.getDate()+diff-weeksBack*7);start.setHours(0,0,0,0);
   const end=new Date(start);end.setDate(end.getDate()+7);
-  const acts=stravaActivities.filter(a=>{const d=new Date(a.start_date_local||a.start_date);return d>=start&&d<end;});
+  const acts=stravaActivities.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date);return d>=start&&d<end;});
   let load=0,bike=0,run=0,swim=0,cal=0,runSec=0,runDist=0;
   acts.forEach(a=>{
-    const s=a.summary||a;
-    load+=s.relative_effort||0;bike+=(a.sport_type==="Ride"||a.sport_type==="VirtualRide")?s.distance||0:0;
-    run+=a.sport_type==="Run"?s.distance||0:0;swim+=a.sport_type==="Swim"?s.distance||0:0;
-    cal+=s.total_calories||0;
-    if(a.sport_type==="Run"){runSec+=s.moving_time||0;runDist+=s.distance||0;}
+    load+=a.suffer_score||a.relative_effort||0;
+    bike+=(a.sport_type==="Ride"||a.sport_type==="VirtualRide")?a.distance||0:0;
+    run+=a.sport_type==="Run"?a.distance||0:0;
+    swim+=a.sport_type==="Swim"?a.distance||0:0;
+    cal+=a.calories||a.kilojoules||0;
+    if(a.sport_type==="Run"){runSec+=a.moving_time||0;runDist+=a.distance||0;}
   });
   return{load,bike:bike/1000,run:run/1000,swim,cal,runPace:runDist>0?fmtPace(runDist,runSec):"—"};
 }
@@ -544,14 +556,14 @@ function weekCard(w){
     const ac=document.createElement("div");ac.className="strava-activities";
     if(wkActs.length===0&&stravaToken){const lbl=document.createElement("div");lbl.className="strava-loading";lbl.textContent="No activities recorded this week yet.";ac.appendChild(lbl);}
     wkActs.forEach(a=>{
-      const s=a.summary||a;const sport=a.sport_type||"Run";
+      const sport=a.sport_type||"Run";
       const card=document.createElement("div");card.className="act-card";
       const bar=document.createElement("div");bar.className="act-disc";bar.style.background=discColor(sport);
       const bd=document.createElement("div");bd.className="act-body";
       const nm=document.createElement("div");nm.className="act-name";nm.textContent=a.name||sport;
       const meta=document.createElement("div");meta.className="act-meta";
-      const dist=s.distance||0;const time=s.moving_time||0;const elev=s.elevation_gain||0;
-      const hr=s.average_heartrate||s.avg_heartrate;const cal=s.total_calories||s.calories;
+      const dist=a.distance||0;const time=a.moving_time||0;const elev=a.total_elevation_gain||a.elevation_gain||0;
+      const hr=a.average_heartrate;const cal=a.calories||a.kilojoules;
       const stats=[[fmtDist(dist,sport),"dist"],[fmtTime(time),"time"]];
       if(elev>10)stats.push([Math.round(elev)+"m","elev"]);
       if(hr)stats.push([Math.round(hr)+" bpm","HR"]);
