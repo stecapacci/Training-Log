@@ -374,29 +374,30 @@ async function stravaRefreshIfNeeded(){
 }
 async function fetchStravaActivities(){
   if(!stravaToken){console.warn("fetchStravaActivities: no token");return;}
-  const after=Math.floor(Date.now()/1000)-90*86400;
-  console.log("Fetching Strava activities, token starts:",stravaToken.slice(0,8)+"...");
+  console.log("Fetching Strava activities...");
   try{
-    const res=await fetch(`https://www.strava.com/api/v3/athlete/activities?per_page=100&after=${after}`,{headers:{Authorization:`Bearer ${stravaToken}`}});
-    console.log("Strava API status:",res.status);
-    if(res.status===401){
-      console.warn("Strava 401 — token expired");
-      stravaToken=null;localStorage.removeItem("strava_token");showStravaBtn();return;
+    // Fetch 2 pages of 100 newest activities (covers ~6 months of heavy training)
+    const headers={Authorization:`Bearer ${stravaToken}`};
+    const base="https://www.strava.com/api/v3/athlete/activities?per_page=100";
+    const res1=await fetch(base+"&page=1",{headers});
+    console.log("Strava page 1 status:",res1.status);
+    if(res1.status===401){stravaToken=null;localStorage.removeItem("strava_token");showStravaBtn();return;}
+    const page1=await res1.json();
+    if(!Array.isArray(page1)){console.error("Unexpected Strava response:",page1);syncStatus("Strava error",true);return;}
+    const res2=await fetch(base+"&page=2",{headers});
+    const page2=await res2.json();
+    const all=page1.concat(Array.isArray(page2)?page2:[]);
+    console.log("Strava total fetched:",all.length,"activities");
+    if(all.length>0){
+      const newest=all[0];const oldest=all[all.length-1];
+      console.log("Newest:",newest.name,newest.start_date_local);
+      console.log("Oldest:",oldest.name,oldest.start_date_local);
+      const b=weekBounds("08-Jun");
+      const matched=all.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date);return b&&d>=b.start&&d<=b.end;});
+      console.log("Matching 08-Jun week:",matched.map(a=>a.name+" "+a.start_date_local));
     }
-    const json=await res.json();
-    console.log("Strava returned:",Array.isArray(json)?json.length:"NOT ARRAY",json);
-    if(!Array.isArray(json)){console.error("Unexpected Strava response:",json);syncStatus("Strava error: "+JSON.stringify(json),true);return;}
-    if(json.length>0){
-      const a=json[0];
-      console.log("FIRST ACTIVITY:",a.name,a.sport_type,"start_date_local:["+a.start_date_local+"]","start_date:["+a.start_date+"]","dist:",a.distance,"parsed local:",parseLocalDate(a.start_date_local||a.start_date).toDateString());
-      // check how many match the current week card dates
-      const testBounds=weekBounds("08-Jun");
-      if(testBounds)console.log("08-Jun bounds:",testBounds.start.toDateString(),"→",testBounds.end.toDateString());
-      const jun8acts=stravaActivities.filter?stravaActivities:[json];
-      console.log("Activities matching 08-Jun week:",json.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date);const b=weekBounds("08-Jun");return b&&d>=b.start&&d<b.end;}).map(a=>a.name+" "+a.start_date_local));
-    }
-    stravaActivities=json;
-    syncStatus("Synced ✓ · "+json.length+" activities");
+    stravaActivities=all;
+    syncStatus("Synced ✓ · "+all.length+" activities loaded");
     updateTrends();
     renderSparkline();
     renderWeeks();
