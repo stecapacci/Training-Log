@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v13 -->
+<!-- v14 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Big Build — Stefano</title>
@@ -414,7 +414,6 @@ async function fetchStravaActivities(){
     stravaActivities=all;
     syncStatus("Synced ✓ · "+all.length+" activities loaded");
     updateTrends();
-    renderSparkline();
     renderWeeks();
     hideStravaBtn();
   }catch(e){console.error("Strava fetch failed",e);}
