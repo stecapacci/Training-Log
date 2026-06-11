@@ -41,15 +41,20 @@
   .trend-card.down .tc-val{color:var(--run)}
   .trend-card.neutral .tc-val{color:var(--ink)}
 
-  /* sparkline chart row */
+  /* weekly stats table */
   .sparkrow{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);margin-bottom:14px;overflow-x:auto}
-  .sparkrow-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .sparkrow-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
   .sparkrow-head h3{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:15px;margin:0}
-  .spark-tabs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
-  .spark-tab{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;padding:4px 9px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer;color:var(--ink-soft)}
-  .spark-tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .spark-canvas-wrap{min-width:0;overflow-x:auto}
-  canvas.spark{display:block;width:100%;height:80px}
+  .wk-stats-table{width:100%;border-collapse:collapse;font-family:"JetBrains Mono",monospace;font-size:12px;min-width:560px}
+  .wk-stats-table th{text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-soft);padding:4px 10px;border-bottom:1px solid var(--line);font-weight:500}
+  .wk-stats-table th:first-child{text-align:left}
+  .wk-stats-table td{text-align:right;padding:6px 10px;border-bottom:1px solid var(--line)}
+  .wk-stats-table td:first-child{text-align:left;color:var(--ink-soft);font-size:11px}
+  .wk-stats-table tr:last-child td{border-bottom:none}
+  .wk-stats-table tr.this-wk td{font-weight:700;color:var(--ink)}
+  .wk-stats-table tr.this-wk td:first-child{color:var(--ink)}
+  .st-up{color:var(--good)}.st-down{color:var(--run)}.st-neu{color:var(--ink-soft)}
+  .trend-chip{font-size:10px;margin-left:4px}
 
   /* session completion bar */
   .comp-bar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px;box-shadow:var(--shadow);margin-bottom:14px;display:flex;align-items:center;gap:14px}
@@ -118,9 +123,12 @@
   .act-date{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--ink-soft);margin-left:auto;white-space:nowrap;padding-top:2px}
   .strava-loading{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-soft);padding:8px 0}
 
-  /* notes */
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px}
-  @media(max-width:620px){.two{grid-template-columns:1fr}}
+  /* week body two-col: planned | strava */
+  .wk-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px}
+  @media(max-width:700px){.wk-cols{grid-template-columns:1fr}}
+  .wk-col-head{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-soft);margin:0 0 7px}
+  /* comments full width */
+  .comments-wrap{margin-top:14px}
   textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 11px;font:inherit;color:var(--ink);resize:none;min-height:62px;line-height:1.45}
   textarea:focus{outline:none;border-color:var(--ink)}
   textarea::placeholder{color:#A4AEB7}
@@ -200,47 +208,47 @@
       <div class="trend-card neutral" id="tc-load">
         <div class="tc-label">Weekly load</div>
         <div class="tc-val" id="tv-load">—</div>
-        <div class="tc-sub" id="ts-load">relative effort</div>
-      </div>
-      <div class="trend-card neutral" id="tc-bike">
-        <div class="tc-label">Bike this week</div>
-        <div class="tc-val" id="tv-bike">—</div>
-        <div class="tc-sub" id="ts-bike">km</div>
-      </div>
-      <div class="trend-card neutral" id="tc-run">
-        <div class="tc-label">Run this week</div>
-        <div class="tc-val" id="tv-run">—</div>
-        <div class="tc-sub" id="ts-run">km</div>
-      </div>
-      <div class="trend-card neutral" id="tc-swim">
-        <div class="tc-label">Swim this week</div>
-        <div class="tc-val" id="tv-swim">—</div>
-        <div class="tc-sub" id="ts-swim">m</div>
+        <div class="tc-sub" id="ts-load">hrs training</div>
       </div>
       <div class="trend-card neutral" id="tc-calories">
         <div class="tc-label">Calories burned</div>
         <div class="tc-val" id="tv-calories">—</div>
-        <div class="tc-sub" id="ts-calories">this week</div>
+        <div class="tc-sub" id="ts-calories">kcal this week</div>
       </div>
       <div class="trend-card neutral" id="tc-runpace">
-        <div class="tc-label">Avg run pace</div>
+        <div class="tc-label">Run pace</div>
         <div class="tc-val" id="tv-runpace">—</div>
-        <div class="tc-sub" id="ts-runpace">min/km this week</div>
+        <div class="tc-sub" id="ts-runpace">7-wk avg min/km</div>
+      </div>
+      <div class="trend-card neutral" id="tc-power">
+        <div class="tc-label">Bike power</div>
+        <div class="tc-val" id="tv-power">—</div>
+        <div class="tc-sub" id="ts-power">7-wk avg watts</div>
+      </div>
+      <div class="trend-card neutral" id="tc-swimpace">
+        <div class="tc-label">Swim pace</div>
+        <div class="tc-val" id="tv-swimpace">—</div>
+        <div class="tc-sub" id="ts-swimpace">7-wk avg /100m</div>
       </div>
     </div>
 
-    <!-- sparkline -->
+    <!-- weekly stats table -->
     <div class="sparkrow">
       <div class="sparkrow-head">
-        <h3>Training load — last 8 weeks</h3>
-        <div class="spark-tabs">
-          <button class="spark-tab active" data-metric="load">Load</button>
-          <button class="spark-tab" data-metric="bike">Bike km</button>
-          <button class="spark-tab" data-metric="run">Run km</button>
-          <button class="spark-tab" data-metric="swim">Swim m</button>
-        </div>
+        <h3>Training — last 8 weeks</h3>
       </div>
-      <div class="spark-canvas-wrap"><canvas class="spark" id="sparkCanvas" height="80"></canvas></div>
+      <div style="overflow-x:auto">
+        <table class="wk-stats-table" id="wkStatsTable">
+          <thead><tr>
+            <th>Week</th>
+            <th>Hours</th>
+            <th>Bike km</th>
+            <th>Run km</th>
+            <th>Swim m</th>
+          </tr></thead>
+          <tbody id="wkStatsBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- session completion -->
@@ -469,21 +477,62 @@ function weeklyTotals(weeksBack=0){
     return d>=start&&d<end;
   });
   console.log("  matched",acts.length,"activities for this window");
-  let load=0,bike=0,run=0,swim=0,cal=0,runSec=0,runDist=0;
+  let secs=0,bike=0,run=0,swim=0,cal=0,runSec=0,runDist=0,swimSec=0,swimDist=0,bikeWatts=0,bikeWattsActs=0;
   acts.forEach(a=>{
-    load+=a.suffer_score||a.weighted_average_watts||0;
+    secs+=a.moving_time||0;
     bike+=(a.sport_type==="Ride"||a.sport_type==="VirtualRide"||a.sport_type==="EBikeRide")?a.distance||0:0;
     run+=(a.sport_type==="Run"||a.sport_type==="TrailRun")?a.distance||0:0;
     swim+=a.sport_type==="Swim"?a.distance||0:0;
     cal+=a.kilojoules?Math.round(a.kilojoules*0.239):0;
     if(a.sport_type==="Run"||a.sport_type==="TrailRun"){runSec+=a.moving_time||0;runDist+=a.distance||0;}
+    if(a.sport_type==="Swim"&&a.distance>0){swimSec+=a.moving_time||0;swimDist+=a.distance||0;}
+    if((a.sport_type==="Ride"||a.sport_type==="VirtualRide")&&a.average_watts>0){bikeWatts+=a.average_watts;bikeWattsActs++;}
   });
-  return{load,bike:bike/1000,run:run/1000,swim,cal,runPace:runDist>0?fmtPace(runDist,runSec):"—"};
+  const hrs=secs/3600;
+  return{hrs,bike:bike/1000,run:run/1000,swim,cal,
+    runPace:runDist>0?fmtPace(runDist,runSec):"—",
+    swimPace:swimDist>0?fmtPaceSwim(swimDist,swimSec):"—",
+    avgPower:bikeWattsActs>0?Math.round(bikeWatts/bikeWattsActs):0};
 }
 function trendArrow(curr,prev){if(prev===0)return"";return curr>prev?"↑":"↓";}
 function trendClass(curr,prev,higherIsBetter=true){
   if(prev===0)return"neutral";
   return(curr>prev)===higherIsBetter?"up":"down";
+}
+function rollingAvg(metric,weeks=7){
+  // average of metric over last N weeks (weeks 1..N, not current)
+  const vals=[];
+  for(let i=1;i<=weeks;i++){const t=weeklyTotals(i);const v=t[metric];if(typeof v==="number"&&v>0)vals.push(v);}
+  if(!vals.length)return null;
+  return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+function rollingPaceAvg(metric,weeks=7){
+  // weighted pace average over last N weeks
+  let totalDist=0,totalSec=0;
+  for(let i=1;i<=weeks;i++){
+    const acts=weeklyActsByWindow(i);
+    acts.forEach(a=>{
+      const isRun=(metric==="run")&&(a.sport_type==="Run"||a.sport_type==="TrailRun");
+      const isSwim=(metric==="swim")&&a.sport_type==="Swim";
+      if(isRun){totalDist+=a.distance||0;totalSec+=a.moving_time||0;}
+      if(isSwim){totalDist+=a.distance||0;totalSec+=a.moving_time||0;}
+    });
+  }
+  if(metric==="run")return totalDist>0?fmtPace(totalDist,totalSec):"—";
+  return totalDist>0?fmtPaceSwim(totalDist,totalSec):"—";
+}
+function weeklyActsByWindow(weeksBack){
+  const now=new Date();const start=new Date(now);
+  const dow=start.getDay();const diff=dow===0?-6:1-dow;
+  start.setDate(start.getDate()+diff-weeksBack*7);start.setHours(0,0,0,0);
+  const end=new Date(start);end.setDate(end.getDate()+7);
+  return stravaActivities.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date||"");return d>=start&&d<end;});
+}
+function paceImproved(curr,prev){
+  // lower pace = better
+  if(curr==="—"||prev==="—")return"neutral";
+  const toSec=p=>{const[m,s]=p.split(":").map(Number);return m*60+(s||0);};
+  return toSec(curr)<toSec(prev)?"up":"down";
 }
 function updateTrends(){
   if(!stravaActivities.length)return;
@@ -493,51 +542,48 @@ function updateTrends(){
     const tv=document.getElementById("tv-"+id);if(tv)tv.textContent=val;
     const ts=document.getElementById("ts-"+id);if(ts)ts.textContent=sub;
   };
-  const loadVal=curr.load>0?Math.round(curr.load):acts_this_week_count();
-  set("load",Math.round(curr.load)||"—",curr.load>0?`vs ${Math.round(prev.load)} last week ${trendArrow(curr.load,prev.load)}`:"suffer score",trendClass(curr.load,prev.load));
-  set("bike",curr.bike.toFixed(0),`vs ${prev.bike.toFixed(0)}km last week ${trendArrow(curr.bike,prev.bike)}`,trendClass(curr.bike,prev.bike));
-  set("run",curr.run.toFixed(1),`vs ${prev.run.toFixed(1)}km last week ${trendArrow(curr.run,prev.run)}`,trendClass(curr.run,prev.run));
-  set("swim",Math.round(curr.swim),`vs ${Math.round(prev.swim)}m last week ${trendArrow(curr.swim,prev.swim)}`,trendClass(curr.swim,prev.swim));
-  set("calories",Math.round(curr.cal),`vs ${Math.round(prev.cal)} last week ${trendArrow(curr.cal,prev.cal)}`,trendClass(curr.cal,prev.cal));
-  set("runpace",curr.runPace,prev.runPace!=="—"?`vs ${prev.runPace} last week`:"min/km this week","neutral");
+  // Weekly load as hours
+  const hrsStr=curr.hrs>=1?(curr.hrs).toFixed(1)+"h":Math.round(curr.hrs*60)+"m";
+  const prevHrsStr=prev.hrs>=1?(prev.hrs).toFixed(1)+"h":Math.round(prev.hrs*60)+"m";
+  set("load",hrsStr,`vs ${prevHrsStr} last week ${trendArrow(curr.hrs,prev.hrs)}`,trendClass(curr.hrs,prev.hrs));
+  // Calories
+  set("calories",curr.cal>0?Math.round(curr.cal):"—",`vs ${Math.round(prev.cal)} last week ${trendArrow(curr.cal,prev.cal)}`,trendClass(curr.cal,prev.cal));
+  // 7-week rolling run pace
+  const runPace7=rollingPaceAvg("run",7);
+  const runPaceCurr=curr.runPace;
+  const runSub=runPace7!=="—"?`this wk: ${runPaceCurr} · 7wk avg`:"this week";
+  set("runpace",runPace7,runSub,paceImproved(runPaceCurr,runPace7));
+  // 7-week rolling bike power
+  const powerAvg=rollingAvg("avgPower",7);
+  const powerStr=powerAvg?Math.round(powerAvg)+"W":"—";
+  const currPowerStr=curr.avgPower>0?curr.avgPower+"W this wk":"no rides";
+  set("power",powerStr,currPowerStr,curr.avgPower>0&&powerAvg>0?trendClass(curr.avgPower,powerAvg):"neutral");
+  // 7-week rolling swim pace
+  const swimPace7=rollingPaceAvg("swim",7);
+  const swimPaceCurr=curr.swimPace;
+  const swimSub=swimPace7!=="—"?`this wk: ${swimPaceCurr} · 7wk avg`:"this week";
+  set("swimpace",swimPace7,swimSub,paceImproved(swimPaceCurr,swimPace7));
+  // render weekly table
+  renderWeeklyTable();
+}
+function renderWeeklyTable(){
+  const tbody=document.getElementById("wkStatsBody");if(!tbody)return;
+  tbody.innerHTML="";
+  const now=new Date();
+  for(let i=7;i>=0;i--){
+    const t=weeklyTotals(i);
+    const start=new Date(now);const dow=start.getDay();const diff=dow===0?-6:1-dow;
+    start.setDate(start.getDate()+diff-i*7);
+    const label=i===0?"This week":start.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+    const tr=document.createElement("tr");if(i===0)tr.className="this-wk";
+    const hrsStr=t.hrs>0?(t.hrs>=1?(t.hrs).toFixed(1)+"h":Math.round(t.hrs*60)+"m"):"—";
+    tr.innerHTML=`<td>${label}</td><td>${hrsStr}</td><td>${t.bike>0?t.bike.toFixed(0)+"km":"—"}</td><td>${t.run>0?t.run.toFixed(1)+"km":"—"}</td><td>${t.swim>0?Math.round(t.swim)+"m":"—"}</td>`;
+    tbody.appendChild(tr);
+  }
 }
 
-/* ── sparkline ── */
-function renderSparkline(){
-  const canvas=document.getElementById("sparkCanvas");if(!canvas)return;
-  const weeks=8;const data=[];
-  for(let i=weeks-1;i>=0;i--){
-    const t=weeklyTotals(i);
-    const val=sparkMetric==="load"?t.load:sparkMetric==="bike"?t.bike:sparkMetric==="run"?t.run:t.swim/1000;
-    data.push({val,label:`W-${i}`});
-  }
-  data[data.length-1].label="This wk";
-  const dpr=window.devicePixelRatio||1;const W=canvas.offsetWidth||600;const H=80;
-  canvas.width=W*dpr;canvas.height=H*dpr;
-  const ctx=canvas.getContext("2d");ctx.scale(dpr,dpr);
-  ctx.clearRect(0,0,W,H);
-  const max=Math.max(...data.map(d=>d.val),1);const pad={t:8,b:20,l:10,r:10};
-  const bw=(W-pad.l-pad.r)/weeks;
-  const colors={load:"var(--strength)",bike:"var(--bike)",run:"var(--run)",swim:"var(--swim)"};
-  const colStr=getComputedStyle(document.documentElement).getPropertyValue("--"+sparkMetric)||"#7A5AF0";
-  // draw bars
-  data.forEach((d,i)=>{
-    const bh=((d.val/max)*(H-pad.t-pad.b));
-    const x=pad.l+i*bw+bw*0.15;const y=H-pad.b-bh;const w=bw*0.7;
-    ctx.fillStyle=i===weeks-1?"#15191F":"#D5DCE2";
-    ctx.beginPath();ctx.roundRect(x,y,w,Math.max(bh,2),3);ctx.fill();
-  });
-  // labels
-  ctx.fillStyle="#5A6470";ctx.font=`10px "JetBrains Mono",monospace`;ctx.textAlign="center";
-  data.forEach((d,i)=>{const x=pad.l+i*bw+bw/2;ctx.fillText(d.label,x,H-4);});
-}
-document.querySelectorAll(".spark-tab").forEach(btn=>{
-  btn.addEventListener("click",()=>{
-    document.querySelectorAll(".spark-tab").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");sparkMetric=btn.dataset.metric;renderSparkline();
-  });
-});
-window.addEventListener("resize",()=>renderSparkline());
+/* sparkline replaced by renderWeeklyTable */
+// sparkline replaced by weekly stats table
 
 /* ── default plan ── */
 function defaultState(){
@@ -561,7 +607,6 @@ function defaultState(){
 function render(){
   const t=document.querySelector('[data-field="title"]');if(t&&t.textContent!==state.title)t.textContent=state.title;
   renderTimeline();renderWeeks();updateStats();
-  setTimeout(renderSparkline,50);
 }
 function renderTimeline(){
   const el=document.getElementById("timeline");el.innerHTML="";
@@ -586,18 +631,26 @@ function weekCard(w){
   el.appendChild(head);
   const body=document.createElement("div");body.className="wk-body";
   const focus=document.createElement("div");focus.className="focus";focus.contentEditable="true";focus.spellcheck=false;focus.dataset.field="focus";focus.textContent=w.focus;body.appendChild(focus);
-  const pl=document.createElement("div");pl.className="col-label";pl.textContent="Planned — tap to check off";body.appendChild(pl);
-  const list=document.createElement("div");list.className="plan";w.planned.forEach(p=>list.appendChild(plannedRow(p)));body.appendChild(list);
-  if(!w.isRace){const add=document.createElement("button");add.className="add-sess";add.dataset.action="add-sess";add.textContent="+ session";body.appendChild(add);}
-  if(w.isRace){const rt=document.createElement("div");rt.className="race-targets";rt.innerHTML="<b>Benchmark training day, not a race</b> — no taper, training legs. Reference: swim ~40 min, bike ~2:40, run ~1:40.";body.appendChild(rt);}
 
-  // Strava activities for this week
+  // side-by-side columns
+  const cols=document.createElement("div");cols.className="wk-cols";
+
+  // LEFT: planned
+  const leftCol=document.createElement("div");
+  const pl=document.createElement("div");pl.className="wk-col-head";pl.textContent="Planned — tap to check off";leftCol.appendChild(pl);
+  const list=document.createElement("div");list.className="plan";w.planned.forEach(p=>list.appendChild(plannedRow(p)));leftCol.appendChild(list);
+  if(!w.isRace){const add=document.createElement("button");add.className="add-sess";add.dataset.action="add-sess";add.textContent="+ session";leftCol.appendChild(add);}
+  if(w.isRace){const rt=document.createElement("div");rt.className="race-targets";rt.innerHTML="<b>Benchmark training day, not a race</b> — no taper, training legs. Reference: swim ~40 min, bike ~2:40, run ~1:40.";leftCol.appendChild(rt);}
+  cols.appendChild(leftCol);
+
+  // RIGHT: strava activities
+  const rightCol=document.createElement("div");
   const wkActs=activitiesForWeek(w.date);
   {
-    const al=document.createElement("div");al.className="col-label";al.textContent="Strava activities"+(stravaToken?" ("+wkActs.length+")":" — connect Strava to sync");body.appendChild(al);
+    const al=document.createElement("div");al.className="wk-col-head";al.textContent="Strava activities"+(stravaToken?" ("+wkActs.length+")":" — connect Strava");rightCol.appendChild(al);
     const ac=document.createElement("div");ac.className="strava-activities";
-    if(!stravaToken){const lbl=document.createElement("div");lbl.className="strava-loading";lbl.textContent="Connect Strava (button in header) to auto-populate activities.";ac.appendChild(lbl);}
-    else if(wkActs.length===0){const lbl=document.createElement("div");lbl.className="strava-loading";lbl.textContent="No Strava activities found for this week ("+w.date+").";ac.appendChild(lbl);}
+    if(!stravaToken){const lbl=document.createElement("div");lbl.className="strava-loading";lbl.textContent="Connect Strava in header to auto-populate.";ac.appendChild(lbl);}
+    else if(wkActs.length===0){const lbl=document.createElement("div");lbl.className="strava-loading";lbl.textContent="No activities found for this week.";ac.appendChild(lbl);}
     wkActs.forEach(a=>{
       const sport=a.sport_type||"Run";
       const card=document.createElement("div");card.className="act-card";
@@ -621,10 +674,16 @@ function weekCard(w){
     body.appendChild(ac);
   }
 
-  // comments
-  const two=document.createElement("div");two.className="two";
-  two.appendChild(field("My comments",w.comments,"comments","How the week felt, energy, sleep, niggles…"));
-  body.appendChild(two);
+  cols.appendChild(rightCol);
+  body.appendChild(cols);
+
+  // full-width comments
+  const cw=document.createElement("div");cw.className="comments-wrap";
+  const cl=document.createElement("div");cl.className="wk-col-head";cl.style.marginTop="14px";cl.textContent="My comments";cw.appendChild(cl);
+  const ta=document.createElement("textarea");ta.dataset.field="comments";ta.placeholder="How the week felt, energy, sleep, niggles…";ta.value=w.comments||"";
+  ta.addEventListener("input",()=>{autoGrow(ta);});cw.appendChild(ta);
+  requestAnimationFrame(()=>autoGrow(ta));
+  body.appendChild(cw);
 
   // habits
   const habits=w.habits||emptyHabits();
