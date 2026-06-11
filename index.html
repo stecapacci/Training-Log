@@ -328,12 +328,15 @@ async function stravaConnect(){
   location.href=url;
 }
 async function stravaExchangeCode(code){
+  console.log("Exchanging Strava code:",code.slice(0,8)+"...");
   try{
     const secretSnap=await getDoc(_STRAVA_DOC);
     if(!secretSnap.exists())throw new Error("No Strava secret in Firestore");
     const clientSecret=secretSnap.data().clientSecret;
+    console.log("Got client secret from Firestore, length:",clientSecret.length);
     const res=await fetch("https://www.strava.com/oauth/token",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({client_id:STRAVA_CLIENT_ID,client_secret:clientSecret,code,grant_type:"authorization_code"})});
     const data=await res.json();
+    console.log("Token exchange response keys:",Object.keys(data));
     if(data.access_token){
       stravaToken=data.access_token;
       localStorage.setItem("strava_token",data.access_token);
@@ -347,9 +350,15 @@ async function stravaExchangeCode(code){
 }
 async function stravaRefreshIfNeeded(){
   const exp=parseInt(localStorage.getItem("strava_token_exp")||"0");
-  if(Date.now()/1000 < exp-300){stravaToken=localStorage.getItem("strava_token");return;}
+  const remaining=Math.round(exp-Date.now()/1000);
+  console.log("Strava token expires in:",remaining,"s, refresh token present:",!!localStorage.getItem("strava_refresh_token"));
+  if(Date.now()/1000 < exp-300){
+    stravaToken=localStorage.getItem("strava_token");
+    console.log("Using cached token, still valid");
+    return;
+  }
   const refreshToken=localStorage.getItem("strava_refresh_token");
-  if(!refreshToken)return;
+  if(!refreshToken){console.warn("No refresh token — need to reconnect Strava");return;}
   try{
     const secretSnap=await getDoc(_STRAVA_DOC);
     const clientSecret=secretSnap.data().clientSecret;
@@ -364,16 +373,24 @@ async function stravaRefreshIfNeeded(){
   }catch(e){stravaToken=localStorage.getItem("strava_token");}
 }
 async function fetchStravaActivities(){
-  if(!stravaToken)return;
-  // fetch 90 days of activities
+  if(!stravaToken){console.warn("fetchStravaActivities: no token");return;}
   const after=Math.floor(Date.now()/1000)-90*86400;
+  console.log("Fetching Strava activities, token starts:",stravaToken.slice(0,8)+"...");
   try{
     const res=await fetch(`https://www.strava.com/api/v3/athlete/activities?per_page=100&after=${after}`,{headers:{Authorization:`Bearer ${stravaToken}`}});
-    if(res.status===401){stravaToken=null;localStorage.removeItem("strava_token");showStravaBtn();return;}
-    stravaActivities=await res.json();
+    console.log("Strava API status:",res.status);
+    if(res.status===401){
+      console.warn("Strava 401 — token expired");
+      stravaToken=null;localStorage.removeItem("strava_token");showStravaBtn();return;
+    }
+    const json=await res.json();
+    console.log("Strava returned:",json.length,"activities");
+    if(json.length>0)console.log("First activity sample:",JSON.stringify(json[0]).slice(0,300));
+    stravaActivities=json;
+    syncStatus("Synced ✓ · "+json.length+" Strava activities loaded");
     updateTrends();
     renderSparkline();
-    renderWeeks(); // re-render with strava data
+    renderWeeks();
     hideStravaBtn();
   }catch(e){console.error("Strava fetch failed",e);}
 }
