@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v17 -->
+<!-- v19 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training Log — Stefano</title>
@@ -351,7 +351,7 @@ async function fetchStravaActivities(){
     allActivities=allActivities.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date||"");return d>=new Date(2025,5,1);});
     syncStatus("Synced ✓ · "+allActivities.length+" activities");
     document.getElementById("stravaConnectBtn").style.display="none";
-    updateTrends();renderWeeklyTable();renderWeeks();
+    updateTrends();renderWeeklyTable();renderQuarter();
   }catch(e){console.error("Strava fetch failed",e);}
 }
 function showStravaBtn(){document.getElementById("stravaConnectBtn").style.display="flex";}
@@ -715,13 +715,22 @@ function plannedRow(p,readOnly){
 function field(label,val,key,ph){const w=document.createElement("div");w.innerHTML='<div class="col-label">'+label+'</div>';const ta=document.createElement("textarea");ta.dataset.field=key;ta.placeholder=ph||"";ta.value=val||"";ta.addEventListener("input",()=>autoGrow(ta));w.appendChild(ta);requestAnimationFrame(()=>autoGrow(ta));return w;}
 function autoGrow(ta){ta.style.height="auto";ta.style.height=ta.scrollHeight+"px";}
 function esc(s){return(s||"").replace(/"/g,"&quot;").replace(/</g,"&lt;");}
-function weekOf(id){return state.weeks.find(w=>w.id===id);}
+function weekOf(id){
+  // search live weeks first, then all archive quarters
+  const live=state.weeks.find(w=>w.id===id);
+  if(live)return live;
+  for(const qid of Object.keys(archiveQuarters)){
+    const found=archiveQuarters[qid].find(w=>w.id===id);
+    if(found)return found;
+  }
+  return null;
+}
 
 /* ── events ── */
 document.addEventListener("click",e=>{
   const act=e.target.closest("[data-action]");if(!act)return;
   const a=act.dataset.action;const weekEl=act.closest("[data-week]");const w=weekEl&&weekOf(weekEl.dataset.week);
-  if(a==="collapse"){if(e.target.closest(".ptext,.del,.chip,.check,.habit-inp,textarea,[contenteditable]"))return;if(w){w.collapsed=!w.collapsed;weekEl.classList.toggle("collapsed");schedule();}}
+  if(a==="collapse"){if(e.target.closest(".ptext,.del,.chip,.check,.habit-inp,textarea,[contenteditable]"))return;if(w){w.collapsed=!w.collapsed;weekEl.classList.toggle("collapsed");const isLive=state.weeks.find(x=>x.id===w.id);if(isLive)schedule();}}
   else if(a==="toggle"&&w){const it=w.planned.find(p=>p.id===act.closest("[data-item]").dataset.item);if(it){it.done=act.checked;act.closest(".pitem").classList.toggle("done",it.done);updateStats(state.weeks);updateWkProgress(weekEl,w);schedule();}}
   else if(a==="cycle"&&w){const row=act.closest("[data-item]");const it=w.planned.find(p=>p.id===row.dataset.item);if(it){const i=CYCLE.indexOf(it.disc);it.disc=CYCLE[(i+1)%CYCLE.length];const d=DISC[it.disc];act.style.background=d.c;act.textContent=d.label;updateStats(state.weeks);updateWkProgress(weekEl,w);schedule();}}
   else if(a==="del-sess"&&w){const row=act.closest("[data-item]");w.planned=w.planned.filter(p=>p.id!==row.dataset.item);row.remove();updateStats(state.weeks);updateWkProgress(weekEl,w);schedule();}
@@ -790,22 +799,70 @@ function defaultState(){
 
 /* ══════════════════════════════════════════
    ARCHIVE QUARTERS — pre-filled, read-only
+   Q1 = Jan–Mar, Q2 = Apr–Jun
+   Training started March 9, so Q1 has 4 weeks
+   Q2 has the bulk of the pre-race build
 ══════════════════════════════════════════ */
 const archiveQuarters={
   "q1-2026":[
-    {id:uid(),date:"09-Mar",phase:"Base",collapsed:true,focus:"First full structured week. Short swims, bike and run. No strength — noted as BAD. Overall underperforming.",planned:[P("swim","Swim 1,200m"),P("bike","Bike 60 min"),P("run","Run 45 min Z2"),P("swim","Swim 1,100m"),P("strength","Strength + Mobility"),P("bike","Long Bike 2h Z2"),P("run","Easy Run 40 min")],comments:"No workout fri-sat-sun BAD. No running — bad weather and no time. No strength training — BAD.\nOVERALL: underperforming",habits:emptyHabits()},
-    {id:uid(),date:"16-Mar",phase:"Base",collapsed:true,focus:"Good training week. Longer swims and rides. No strength.",planned:[P("swim","Swim 1.2–1.4 km"),P("bike","Bike 60–70 min"),P("run","Run 50–55 min Z2"),P("swim","Swim 1,200m"),P("strength","Strength + Mobility"),P("bike","Long Bike 2h15 Z2"),P("run","Run 55 min Z2")],comments:"Swim 1800 · Trainer 1:20h 32km · Swim 1500 · Run 6k difficult zone 4 · Bike morning 36km easy (social) · Swim 1600 · Long ride 110km · 7km run · NO strength\nOVERALL: good training week",habits:emptyHabits()},
-    {id:uid(),date:"23-Mar",phase:"Build",collapsed:true,focus:"Felt a little sick most of the week. Not a lot of time due to work mid week. Runs not split as prescribed.",planned:[P("swim","Swim 1,300m"),P("bike","Bike 75 min Z4"),P("run","Run 50 min Z2+Z3"),P("swim","Swim 1,200m"),P("strength","Strength + Mobility"),P("bike","Long Bike 2h30"),P("run","Run 60 min OLY pace")],comments:"Rulli 60m zone 2 · Swim 2000m very good · Rulli 30m quick · Rulli 90m incremental + strength · Swim 2000m very good uninterrupted · 19k run zone 3-4 hard, coughing · 75k 1600m elevation bike · 5k run 6 pace · Strength 25'\nOVERALL: felt sick most of week, not a lot of time due to work",habits:emptyHabits()},
-    {id:uid(),date:"30-Mar",phase:"Build",collapsed:true,focus:"Super strong ride. Neglecting run and mobility. Started Citisina on Tuesday.",planned:[P("swim","Swim 1,500m"),P("bike","Bike 70 min SS"),P("run","Run 60 min intervals"),P("swim","Swim 1,200m"),P("strength","Strength + Mobility"),P("brick","Brick 1h45 bike + 20 run"),P("run","Easy Run 45 min")],comments:"Swim 1500m · Rulli 60 min 150w · Swim 2000m 1:59 pace · Run 5k easy <6 · Ride 125k 2300m elevation 6 hours HARD · Swim 2000m+ 1:50 pace · Run 22k 5:30 pace (after chain-smoking Saturday) · Walk home 3k\nSwim pace ~2:00. Started Citisina Tuesday. Super strong ride! Neglecting run and mobility.",habits:emptyHabits()},
-    {id:uid(),date:"06-Apr",phase:"Build",collapsed:true,focus:"Another week avoiding runs. Smoked too much. No strength training.",planned:[P("bike","Bike 75 min Z4"),P("run","Run 60 min + strides"),P("swim","Swim 1,800m continuous"),P("strength","Strength + Mobility"),P("brick","Brick 2h bike + 35 run"),P("run","Long Run 80 min")],comments:"Bike 75k 1500m elevation · Run 5k @ 6 pace (recovery) · Rulli 60m 135W · Swim 2000m 2:00 pace low HR · Rulli 1h15m 130w (ate too much) · Swim 1500 1:55 · Bike 80km 1700m elevation 4 hours · Brick 25+5\nAnother week avoiding runs. Smoked too much. Do strength training!",habits:emptyHabits()},
-    {id:uid(),date:"13-Apr",phase:"Deload",collapsed:true,focus:"De-load week, tired recovering. Underperforming. Too much smoking, too little running.",planned:[P("swim","Swim 1,800m"),P("bike","Bike 90 min Z4"),P("run","Run 70 min Z2/Z3"),P("swim","Swim 2,000m pyramid"),P("strength","Strength + Mobility"),P("brick","Brick 2h30 bike + 45 run"),P("run","Long Run 90 min")],comments:"Rulli 1h low effort 21km · Swim 1500 1:57 · Run 5k 6:20 · Strength · Swim 1000m 1:59 · Ride 85km 1200 elevation\nDe-load week. Start of week tired. Underperforming. Too much smoking, too little running.",habits:emptyHabits()},
-    {id:uid(),date:"20-Apr",phase:"Race",collapsed:true,isRace:true,focus:"Olympic Triathlon Race Week — Lanzarote. Great week, feel amazing. Turning around the smoking.",planned:[P("swim","Swim 1,200m"),P("bike","Bike 50 min race power"),P("run","Run 30 min + strides"),P("swim","Swim 1,200m"),P("rest","Mobility"),P("run","Run 20 min race pace"),P("race","Olympic Triathlon Race — Lanzarote")],comments:"Bike 40km 27kmh · OW Swim 1500m 2:00 (tri suit) · Run 10k 5:50 · Bike 55km · Swim 3000m 1:51 pace VERY GOOD · Run 19k 6:30 pace · Swim 1500m 2:07 (tired+cigarette) · Ride 100km 1600m elevation · 3 yoga sessions · Kayaking · Windsurf · Padel\nRACE: Swim 1500 2:02 · Bike 40k 26km/h (lots of wind) · Run 10k 5:10 ✓\n5k 6:00 pace at home Sunday\nFeel amazing! May be turning around the smoking.",habits:emptyHabits()},
-    {id:uid(),date:"27-Apr",phase:"Recovery",collapsed:true,focus:"Recovery week — kinda random activities. Tired legs by Sunday. Big 180k ride.",planned:[P("swim","Swim 1,200m"),P("bike","Bike 45 min Z3"),P("run","Run 30–35 min"),P("swim","Swim 1,200m technique"),P("rest","Mobility"),P("run","Shake-out Run 20 min"),P("rest","Rest")],comments:"Trainer 40km 1:30h 150bpm · Brick run 5k 5:10 pace · Swim 2k 2:00 pace 4x500 · Ride 180k 7 hours (tired legs, psych block after 110km) · Workout 30m · Ride 60k 26kmh · Run 9k 6:00 pace\nRecovery week. Tired legs by Sunday.",habits:emptyHabits()},
-    {id:uid(),date:"04-May",phase:"Base",collapsed:true,focus:"Hurting legs on Monday. Not fully rested mid-week. Feeling sick/stomach ache.",planned:[P("swim","Swim 30–40 min"),P("bike","Bike 45–60 min easy"),P("run","Run 30–40 min"),P("strength","Light Strength"),P("rest","Mobility")],comments:"Rulli 30min low effort · Swim 2000m 1:56 · Ride 50km fast tour 28kmh · Swim 1500m 1:55 · Run 5k @ 5:45 · Ride 80k nice · 45m strength (feels good!) · Rulli 2h 55k (got bored)\nHurting legs Monday and very tired. Feeling sick/stomach ache. Full rest Mon+Wed.",habits:emptyHabits()},
-    {id:uid(),date:"11-May",phase:"Base",collapsed:true,focus:"Wedding week — little access to bike, focus on run. Partying negatively affected fitness.",planned:[P("swim","Swim 2,000m"),P("bike","Bike 75 min Z3"),P("run","Run 60 min"),P("swim","Swim 1,500m technique"),P("strength","Strength + Mobility"),P("bike","Long Bike 2h45"),P("run","Long Run 1h40")],comments:"Swim 1500m 1:56 · Ride 50k 1200m elevation · Swim 2000m 2:00 · Run 5k 5:40 (coughing) · Run 10k 6:40 trail · Run 11k good pace trail\nCoughing like mad Tuesday night. Partying negatively affected fitness. Feeling rough over weekend.",habits:emptyHabits()},
-    {id:uid(),date:"18-May",phase:"Build",collapsed:true,focus:"Emotional turmoil start of week. Sick Wed-Thu. Nausea/digestion issues.",planned:[P("swim","Swim 2,200m"),P("bike","Bike 70 min intervals"),P("run","Run 60–70 min"),P("swim","Swim 1,600m"),P("strength","Strength + Mobility"),P("brick","Brick 3h bike + 40 run"),P("run","Run 90 min HIM pace")],comments:"Run 6k 6:30 · Strength abs 20min · Swim 2500m 2:00 · 7k run · 21km 400m elevation 6 pace · Bike 96k 1000m elevation (first 80k strong then lost it, 25kmh avg)\nSICK Wed+Thu. Recovering Friday. Nausea/digestion issues. Anxiety about race.",habits:emptyHabits()},
-    {id:uid(),date:"25-May",phase:"Deload",collapsed:true,focus:"Terrible week. Nauseated, little sleep, trip to Palma Mallorca. So little training.",planned:[P("swim","Swim 2,500m"),P("bike","Bike 90 min Z3"),P("run","Run 65–70 min"),P("swim","Swim 1,800m technique"),P("strength","Strength + Mobility"),P("bike","Long Ride 4h"),P("run","Long Run 1h50")],comments:"Rulli 35m 140w · Run 15k ok, low sleep very hot, 5:30 pace\nMonday nauseous, still feeling stomach iffy Tuesday. No training Wed on purpose. Trip to Palma ruined training. So little training…",habits:emptyHabits()},
-    {id:uid(),date:"01-Jun",phase:"Race",collapsed:true,isRace:true,focus:"Bike to Sardegna. Half Ironman Alghero 5:59:00. Perfect week.",planned:[P("bike","Bike 45k"),P("run","Run 5k"),P("bike","Ride 120k — bike to Genova"),P("bike","Ride to Alghero 38k"),P("run","Run 5k"),P("swim","Swim 700m"),P("race","Half Ironman Alghero — Swim 1900 · Bike 90k · Run 21k")],comments:"Bike 45k · Bike 25k · Run 5k · Ride 120k bike to Genova (ferry to Alghero) · Ride to Alghero 38k · Run 5k · Ride 8k · Swim 700m\nIRONMAN: Swim 1900 · Bike 90k · Run 21k → TOTAL TIME 5:59:00\nPerfect week (chef's kiss). Very tired on the run. Happy with results.",habits:emptyHabits()},
+    {id:uid(),date:"09-Mar",phase:"Base",collapsed:true,
+     focus:"Week 1 — first structured week. Short swims, bike and run. No strength (BAD). No workout fri-sat-sun.",
+     planned:[P("swim","Swim 1,200m"),P("bike","Bike 60 min"),P("run","Run 45 min Z2"),P("swim","Swim 1,100m"),P("strength","Strength + Mobility"),P("bike","Long Bike 2h Z2"),P("run","Easy Run 40 min")],
+     comments:"ACTUAL: No workout fri-sat-sun BAD. No running — bad weather and no time in work week. No strength training — BAD.\nSmoke: x=cig, g=gomma, C=toscanello\nOVERALL: underperforming",habits:emptyHabits()},
+    {id:uid(),date:"16-Mar",phase:"Base",collapsed:true,
+     focus:"Week 2 — good training week. Longer swims and rides. No strength.",
+     planned:[P("swim","Swim 1.2–1.4 km"),P("bike","Bike 60–70 min"),P("run","Run 50–55 min Z2"),P("swim","Swim 1,200m"),P("strength","Strength + Mobility"),P("bike","Long Bike 2h15 Z2"),P("run","Run 55 min Z2")],
+     comments:"ACTUAL: Swim 1800 · Trainer 1:20h 32km · Swim 1500 · Run 6k difficult zone 4 · Bike morning 36km easy (social) · Swim 1600 · Long ride 110km · 7km run · NO strength\nOVERALL: good training week",habits:emptyHabits()},
+    {id:uid(),date:"23-Mar",phase:"Build",collapsed:true,
+     focus:"Week 3 — felt a little sick most of the week. Not a lot of time due to work mid week.",
+     planned:[P("swim","Swim 1,300m"),P("bike","Bike 75 min Z4 (balcone d'Italia+)"),P("run","Run 50 min Z2+Z3"),P("swim","Swim 1,200m"),P("strength","Strength + Mobility"),P("bike","Long Bike 2h30"),P("run","Run 60 min OLY pace finish 5,2+")],
+     comments:"ACTUAL: Rulli 60m zone 2 · Swim 2000m very good (busy time) · Rulli 30m quick and easy · Rulli 90m incremental + some strength after · Swim 2000m very good uninterrupted · 19k run zone 3-4 hard (coughing from beginning, hard to digest food) · 75k 1600m elevation bike (tough but good) · 5k run 6 pace · Strength 25'\nOVERALL: felt sick most of week. Not a lot of time due to work mid-week. Runs not split as prescribed.",habits:emptyHabits()},
+    {id:uid(),date:"30-Mar",phase:"Build",collapsed:true,
+     focus:"Week 4 — super strong ride. Neglecting run and mobility. Started Citisina on Tuesday.",
+     planned:[P("swim","Swim 1,500m"),P("bike","Bike 70 min SS (steady state)"),P("run","Run 60 min intervals"),P("swim","Swim 1,200m"),P("strength","Strength + Mobility"),P("brick","Brick 1h45 bike + 20 run"),P("run","Easy Run 45 min")],
+     comments:"ACTUAL: Swim 1500m · Rulli 60 min 150w · Swim 2000m 1:59 pace · Run 5k easy <6 · Ride 125k 2300m elevation 6 hours HARD · Swim 2000m+ 1:50 pace surprisingly good · Run 22k 5:30 pace (after chain-smoking Saturday — still turned out well) · Walk home 3k\nSmoke W:xgxgxxxxxx T:xxxxXxxxxx F:xX S:xxxxxxxxxxxx (4 beers) xxxxxx S:XxXxxxxx (1 birra)\nSwim pace solidly ~2:00. Started Citisina Tuesday. Super strong ride!! Neglecting run and mobility.",habits:emptyHabits()},
+  ],
+  "q2-2026":[
+    {id:uid(),date:"06-Apr",phase:"Build",collapsed:true,
+     focus:"Week 5 — another week avoiding runs. Smoked too much. No strength training.",
+     planned:[P("bike","Bike 75k 1500m elevation"),P("swim","Swim 1,600m"),P("bike","Bike 75 min Z4"),P("run","Run 60 min + strides"),P("swim","Swim 1,800m continuous"),P("strength","Strength + Mobility"),P("brick","Brick 2h bike + 35 run"),P("run","Long Run 80 min")],
+     comments:"ACTUAL: Bike 75k 1500m elevation · Run 5k @ 6 pace (recovery) · Rulli 60m 135W · Swim 2000m 2:00 pace low HR · Rulli 1h15m 130w (ate too much on bike) · Swim 1500 1:55 · Bike 80km 1700m elevation 4 hours · Brick 25+5\nSmoke M:xxxxxxxxxxxxxxxxxx T:xxxxxxxxx W:xxxxxxxxxx T:xxxxxxxxx F:xxxxxxxxxxxxx S:xxxxxxx S:xxxxxx\nAnother week avoiding runs — this is going to bite me in the ass. Smoked too much. Do strength training!",habits:emptyHabits()},
+    {id:uid(),date:"13-Apr",phase:"Deload",collapsed:true,
+     focus:"Week 6 — de-load week, tired recovering. Underperforming. Too much smoking, too little running.",
+     planned:[P("swim","Swim 1,800m"),P("bike","Bike 90 min Z4"),P("run","Run 70 min Z2/Z3"),P("swim","Swim 2,000m pyramid"),P("strength","Strength + Mobility"),P("brick","Brick 2h30 bike + 45 run"),P("run","Long Run 90 min")],
+     comments:"ACTUAL: Rulli 1h low effort 21km (dinner on bike) · Swim 1500 1:57 · Run 5k 6:20 · Strength · Swim 1000m 1:59 · Ride 85km 1200 elevation\nSmoke M:xxxxxxxx T:xxxxxxx W:xxxxxxxx T:xxxxxxxxxx F:xxxxxxxxxxxxxxxxxxxxxxx(estimate) S:xxxxxxxxgg S:none\nDe-load week. Pool slow (25m busy). Start of week tired recovering. Underperforming. Too much smoking and too little running.",habits:emptyHabits()},
+    {id:uid(),date:"20-Apr",phase:"Race",collapsed:true,isRace:true,
+     focus:"Week 7 — Olympic Triathlon Race Week Lanzarote. Great week, feel amazing. Turning around the smoking.",
+     planned:[P("swim","Swim 1,200m"),P("bike","Bike 50 min race power"),P("run","Run 30 min + strides"),P("swim","Swim 1,200m"),P("rest","Mobility"),P("run","Run 20 min race pace"),P("race","Olympic Triathlon Race — Lanzarote")],
+     comments:"ACTUAL: Bike 40km 27kmh · OW Swim 1500m 2:00 (tri suit) · Run 10k 5:50 · Bike 55km · Swim 3000m 1:51 pace VERY GOOD · Run 19k 6:30 pace · Swim 1500m 2:07 (tired from long day, felt the cigarette) · Ride 100km 1600m elevation 25kmh (tired, could have gone better) · 3 yoga sessions · 2 kayaking sessions · Windsurf · Padel (I suck at any sport with a ball)\nRACE RESULTS: Swim 1500m 2:02 · Bike 40k 26km/h (lots of wind) · Run 10k 5:10 — very happy! · 5k 6:00 pace at home Sunday\nSmoke M:none T:x (two drags, did not want the rest) W:x (WAS NOT WORTH IT) T:x (half, again not worth it) F:none S:xxx S:x (ran out of pills)xxxxx\nFeel amazing! May be turning around the smoking — just need to be too active to afford smoke in my lungs. Keep up the Citisina.",habits:emptyHabits()},
+    {id:uid(),date:"27-Apr",phase:"Recovery",collapsed:true,
+     focus:"Week 8 — recovery week, kinda random activities. Tired legs by Sunday. Big 180k ride.",
+     planned:[P("swim","Swim 1,200m"),P("bike","Bike 45 min Z3"),P("run","Run 30–35 min"),P("swim","Swim 1,200m technique"),P("rest","Mobility"),P("run","Shake-out Run 20 min"),P("rest","Rest")],
+     comments:"ACTUAL: Trainer 40km 1:30h 150bpm · Brick run 5k 5:10 pace · Swim 2k 2:00 pace 4x500 · Ride 180k 7 hours (tired legs — psychological block after 110km, tired from beginning) · Workout 30m · Ride 60k 26kmh · Run 9k 6:00 pace\nSmoke M:xxxxx T:x (one drag..) W:xx T:xx F:none S:xxx S:xx\nRecovery week. Tired legs by Sunday.",habits:emptyHabits()},
+    {id:uid(),date:"04-May",phase:"Base",collapsed:true,
+     focus:"Week 9 — hurting legs on Monday. Not fully rested mid-week. Feeling sick/stomach ache.",
+     planned:[P("swim","Swim 30–40 min"),P("bike","Bike 45–60 min easy"),P("run","Run 30–40 min"),P("strength","Light Strength"),P("rest","Mobility")],
+     comments:"ACTUAL: Rulli 30min low effort on the phone · Swim 2000m 1:56 · Ride 50km fast tour 28kmh of the lake (people slowed down the end) · Swim 1500m 1:55 · Run 5k @ 5:45 · Ride 80k nice · 45m strength in the morning, feels good! · Rulli 2h for 55k (got bored)\nSmoke M:xxxxx T:xxx W:xxx T:x F:none S:xxx S:xx\nHurting legs Monday and very tired. Not fully rested Wednesday. Feeling sick/stomach ache. Full rest Mon+Wed. On Thursday feeling better — just need to shake cobwebs of laziness.",habits:emptyHabits()},
+    {id:uid(),date:"11-May",phase:"Base",collapsed:true,
+     focus:"Week 10 — wedding week, little access to bike. Partying negatively affected fitness. Coughing like mad.",
+     planned:[P("swim","Swim 2,000m"),P("bike","Bike 75 min Z3"),P("run","Run 60 min"),P("swim","Swim 1,500m technique"),P("strength","Strength + Mobility"),P("bike","Long Bike 2h45"),P("run","Long Run 1h40")],
+     comments:"ACTUAL: Swim 1500m 1:56 pace · Ride 50k 1200m elevation · Swim 2000m 2:00 pace · Run 5k 5:40 (coughing) · Run 10k 6:40 trail running · Run 11k good pace trail running\nSmoke M:x T:gx W:none T:none F:xxxxxxxx (reception party, kinda drunk) S:xxxxxxx (drunk again) S:none\nCoughing like mad Tuesday night. Partying negatively affected fitness. Feeling very rough over the weekend. Don't know if I'm doing enough for my races.",habits:emptyHabits()},
+    {id:uid(),date:"18-May",phase:"Build",collapsed:true,
+     focus:"Week 11 — emotional turmoil start of week. Sick Wed-Thu. Nausea and digestion issues.",
+     planned:[P("swim","Swim 2,200m"),P("bike","Bike 70 min intervals"),P("run","Run 60–70 min"),P("swim","Swim 1,600m"),P("strength","Strength + Mobility"),P("brick","Brick 3h bike + 40 run"),P("run","Run 90 min HIM pace")],
+     comments:"ACTUAL: Run 6k 6:30 pace · Strength abs 20min · Swim 2500m 2:00 pace · 7k run · 21km 400m elevation 6 pace · Bike 96k 1000m elevation (first 80k strong then lost it completely — average 25kmh)\nSmoke M:none (drunk) T:x W:none T:none F:none S:none S:x\nSICK on Wed and Thu. Recovering Friday. Nausea — stomach problem. Digestion issues Sunday. Starting week with emotional turmoil, tired, anxiety about race.",habits:emptyHabits()},
+    {id:uid(),date:"25-May",phase:"Deload",collapsed:true,
+     focus:"Week 12 (Imperia) — terrible week. Nauseated, little sleep, trip to Palma Mallorca. So little training.",
+     planned:[P("bike","Rulli 35m 140w"),P("swim","Swim 2,500m"),P("bike","Bike 90 min Z3"),P("run","Run 65–70 min"),P("swim","Swim 1,800m technique"),P("strength","Strength + Mobility"),P("bike","Long Ride 4h"),P("run","Long Run 1h50")],
+     comments:"ACTUAL: Rulli 35m 140w · Run 15k ok (low sleep, very hot, good pace 5:30)\nSmoke M:xx T:xxx W:none T:cxx F:g birrax2 cxxcc S:xx S:none\nMonday nauseous again. Tuesday still stomach iffy. Wednesday no training on purpose. Trip to Palma Mallorca ruined all training — little sleep and drinking at weekend. So little training… Fuck of a week.",habits:emptyHabits()},
+    {id:uid(),date:"01-Jun",phase:"Race",collapsed:true,isRace:true,
+     focus:"Week 13 — bike to Sardegna. Half Ironman Alghero 5:59:00. Perfect week (chef kiss).",
+     planned:[P("bike","Bike 45k"),P("bike","Bike 25k"),P("run","Run 5k"),P("bike","Ride 120k — bike to Genova"),P("bike","Ride to Alghero 38k"),P("run","Run 5k"),P("bike","Ride 8k"),P("swim","Swim 700m"),P("race","Half Ironman Alghero — Swim 1900 · Bike 90k · Run 21k")],
+     comments:"ACTUAL: Bike 45k · Bike 25k · Run 5k · Ride 120k bike to Genova (ferry to Alghero) · Ride to Alghero 38k · Run 5k · Ride 8k · Swim 700m shakeout\nIRONMAN ALGHERO: Swim 1900 · Bike 90k · Run 21k → TOTAL TIME 5:59:00\nSmoke M:one beer with dinner no ciggies T:none W:none T:none F:none S:none S:none — PERFECT WEEK\nSuch a slow recovery week beforehand. Nervous about the race. No serious training — didn't feel very ready. Did not follow training plan but happy I went easy and came in rested. Went very very well. Happy with results. Very tired at the run.",habits:emptyHabits()},
+    {id:uid(),date:"08-Jun",phase:"Re-entry",collapsed:true,
+     focus:"Week 14 — post-Ironman recovery. Bike to Porto Torres. Three easy days then start of new build.",
+     planned:[P("bike","Ride 50k",1),P("bike","Ride 40k",1),P("run","Run 5k @ 5:20",1)],
+     comments:"ACTUAL: Ride 50k · Ride 40k · Run 5k @ 5:20\nSmoke M:none T:none\nPost 70.3 recovery. Easy riding, one short run.",habits:emptyHabits()},
   ],
   "q4-2025":[
     {id:uid(),date:"06-Oct",phase:"Cross-training",collapsed:true,focus:"Strava data available — Crossfit, running and riding from October 2025.",planned:[P("run","Runs per Strava"),P("bike","Rides per Strava"),P("strength","Crossfit sessions per Strava")],comments:"See Strava activities →",habits:emptyHabits()},
