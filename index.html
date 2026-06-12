@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v21 -->
+<!-- v22 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training Log — Stefano</title>
@@ -270,13 +270,35 @@ function emptyHabits(){return H("","","","","","","");}
 function syncStatus(msg,err){const el=document.getElementById("syncStatus");if(!el)return;el.textContent=msg;el.className="sync-status"+(err?" err":"");}
 async function loadState(){
   syncStatus("Connecting…");
-  try{const snap=await getDoc(_DOC);if(snap.exists()){state=snap.data().payload;syncStatus("Synced ✓");}
-  else{state=buildDefaultState();await persist(true);syncStatus("Ready ✓");}}
-  catch(e){syncStatus("Offline — local copy",true);const raw=localStorage.getItem("tri_v20");state=raw?JSON.parse(raw):buildDefaultState();}
+  const seed=buildDefaultState();
+  try{
+    const snap=await getDoc(_DOC);
+    if(snap.exists()){
+      const saved=snap.data().payload;
+      state=seed;
+      Object.keys(saved).forEach(k=>{if(Array.isArray(saved[k])&&saved[k].length>0)state[k]=saved[k];});
+      syncStatus("Synced ✓");
+    } else {
+      state=seed;
+      await persist(true);
+      syncStatus("Ready ✓");
+    }
+  } catch(e){
+    console.warn("Firebase unavailable:",e.message);
+    syncStatus("Saved locally — will sync when online",true);
+    const raw=localStorage.getItem("tri_v21");
+    if(raw){
+      const saved=JSON.parse(raw);
+      state=seed;
+      Object.keys(saved).forEach(k=>{if(Array.isArray(saved[k])&&saved[k].length>0)state[k]=saved[k];});
+    } else {
+      state=seed;
+    }
+  }
 }
 async function persist(silent){
-  try{await setDoc(_DOC,{payload:state});localStorage.setItem("tri_v20",JSON.stringify(state));syncStatus("Synced ✓");if(!silent)flash();}
-  catch(e){localStorage.setItem("tri_v20",JSON.stringify(state));syncStatus("Saved locally",true);if(!silent)flash();}
+  try{await setDoc(_DOC,{payload:state});localStorage.setItem("tri_v21",JSON.stringify(state));syncStatus("Synced ✓");if(!silent)flash();}
+  catch(e){localStorage.setItem("tri_v21",JSON.stringify(state));syncStatus("Saved locally",true);if(!silent)flash();}
 }
 function schedule(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>persist(),600);}
 function flash(){const f=document.getElementById("flash");f.textContent="Saved ✓";f.classList.add("show");clearTimeout(f._t);f._t=setTimeout(()=>f.classList.remove("show"),1100);}
