@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v26 -->
+<!-- v22 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training Log — Stefano</title>
@@ -150,14 +150,6 @@ button.ghost{background:none;color:var(--ink)}button.ghost:hover{background:#fff
 .google-btn:hover{box-shadow:0 2px 12px rgba(21,25,31,.12)}
 .auth-error{margin-top:14px;font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--run);min-height:18px}
 .note{font-size:12.5px;color:var(--ink-soft);margin-top:24px;line-height:1.6}
-.perf-toggle{display:flex;align-items:center;gap:10px;border:none;background:none;padding:0;cursor:pointer;color:var(--ink)}
-.perf-toggle .perf-caret{font-size:14px;color:var(--ink-soft);transition:transform .15s}
-#trendsSection.collapsed .perf-caret{transform:rotate(-90deg)}
-.perf-toggle .perf-sub{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft)}
-#trendsSection.collapsed .perf-body{display:none}
-.seg.current{outline:2px solid var(--ink);outline-offset:2px;transform:translateY(-2px)}
-.seg.current .dt{font-weight:700}
-.week.current-week{box-shadow:0 0 0 2px rgba(21,25,31,.12),var(--shadow)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 </style>
@@ -203,16 +195,6 @@ button.ghost{background:none;color:var(--ink)}button.ghost:hover{background:#fff
   <div class="archive-banner" id="archiveBanner"></div>
 
   <div id="trendsSection">
-    <div class="sparkrow-head" style="margin-bottom:12px">
-      <button class="perf-toggle" id="perfToggle" type="button" aria-expanded="true">
-        <span class="perf-caret">▾</span>
-        <span>
-          <h3 style="margin:0">Performance dashboard</h3>
-          <div class="perf-sub">Metrics, rolling month table, completion and phase timeline</div>
-        </span>
-      </button>
-    </div>
-    <div class="perf-body">
     <div class="trends" id="trendsRow">
       <div class="trend-card neutral" id="tc-load"><div class="tc-label">Weekly load</div><div class="tc-val" id="tv-load">—</div><div class="tc-sub" id="ts-load">hrs training</div></div>
       <div class="trend-card neutral" id="tc-calories"><div class="tc-label">Calories burned</div><div class="tc-val" id="tv-calories">—</div><div class="tc-sub" id="ts-calories">kcal this week</div></div>
@@ -231,8 +213,6 @@ button.ghost{background:none;color:var(--ink)}button.ghost:hover{background:#fff
     <div class="timeline-wrap"><div class="timeline" id="timeline"></div></div>
   </div>
 
-    </div>
-  </div>
   <div class="weeks" id="weeks"></div>
   <div class="controls" id="controls">
     <button class="act" id="addWeek">+ Add a week</button>
@@ -255,14 +235,6 @@ const DISC={swim:{c:"var(--swim)",label:"Swim"},bike:{c:"var(--bike)",label:"Bik
 const PHASE_COL={"Base":"var(--swim)","Build":"var(--bike)","Build 2":"var(--bike)","Build 3":"var(--swim)","Race":"var(--race)","Recovery":"var(--rest)","Deload":"var(--rest)","Reload":"var(--strength)","Sim":"var(--race)","Sim Wk":"var(--race)","Re-entry":"var(--rest)","Brick Block":"var(--brick)","Peak":"var(--run)","Benchmark":"var(--brick)","Cross-training":"var(--strength)","Future":"var(--swim)"};
 const CYCLE=["swim","bike","run","brick","strength","rest"];
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const RUN_SPORTS=["Run","TrailRun"];
-const BIKE_SPORTS=["Ride","VirtualRide","EBikeRide"];
-const SWIM_SPORTS=["Swim"];
-function isRunSport(s){return RUN_SPORTS.includes(s);}
-function isBikeSport(s){return BIKE_SPORTS.includes(s);}
-function isSwimSport(s){return SWIM_SPORTS.includes(s);}
-function loadUiPrefs(){try{return JSON.parse(localStorage.getItem(LS_UI_KEY)||"{}");}catch{return {};}}
-function saveUiPrefs(p){localStorage.setItem(LS_UI_KEY,JSON.stringify({...loadUiPrefs(),...p}));}
 const SPORT_DISC={Run:"run",TrailRun:"run",Ride:"bike",VirtualRide:"bike",EBikeRide:"bike",Swim:"swim",WeightTraining:"strength",Crossfit:"strength",Walk:"rest"};
 
 // Quarter definitions — Monday-based week starts
@@ -286,8 +258,6 @@ function currentQtrId(){
 }
 
 let state={}, saveTimer, allActivities=[], currentQtr=currentQtrId(), _authed=false;
-const LS_STATE_KEY="tri_v26";
-const LS_UI_KEY="tri_v26_ui";
 
 function uid(){return Math.random().toString(36).slice(2,9)}
 function P(disc,text,done){return{id:uid(),disc,text,done:!!done}}
@@ -316,7 +286,7 @@ async function loadState(){
   } catch(e){
     console.warn("Firebase unavailable:",e.message);
     syncStatus("Saved locally — will sync when online",true);
-    const raw=localStorage.getItem(LS_STATE_KEY);
+    const raw=localStorage.getItem("tri_v21");
     if(raw){
       const saved=JSON.parse(raw);
       state=seed;
@@ -327,24 +297,11 @@ async function loadState(){
   }
 }
 async function persist(silent){
-  try{await setDoc(_DOC,{payload:state});localStorage.setItem(LS_STATE_KEY,JSON.stringify(state));syncStatus("Synced ✓");if(!silent)flash();}
-  catch(e){localStorage.setItem(LS_STATE_KEY,JSON.stringify(state));syncStatus("Saved locally",true);if(!silent)flash();}
+  try{await setDoc(_DOC,{payload:state});localStorage.setItem("tri_v21",JSON.stringify(state));syncStatus("Synced ✓");if(!silent)flash();}
+  catch(e){localStorage.setItem("tri_v21",JSON.stringify(state));syncStatus("Saved locally",true);if(!silent)flash();}
 }
 function schedule(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>persist(),600);}
 function flash(){const f=document.getElementById("flash");f.textContent="Saved ✓";f.classList.add("show");clearTimeout(f._t);f._t=setTimeout(()=>f.classList.remove("show"),1100);}
-function initPerfSection(){
-  const section=document.getElementById("trendsSection");
-  const btn=document.getElementById("perfToggle");
-  if(!section||!btn)return;
-  const apply=()=>{
-    const collapsed=!!loadUiPrefs().perfCollapsed;
-    section.classList.toggle("collapsed",collapsed);
-    btn.setAttribute("aria-expanded",String(!collapsed));
-    const caret=btn.querySelector(".perf-caret"); if(caret) caret.textContent=collapsed?"▸":"▾";
-  };
-  btn.onclick=()=>{saveUiPrefs({perfCollapsed:!loadUiPrefs().perfCollapsed});apply();};
-  apply();
-}
 
 /* ── Strava ── */
 function stravaTokenFromCache(){const exp=parseInt(localStorage.getItem("strava_token_exp")||"0");if(Date.now()/1000<exp-300)stravaToken=localStorage.getItem("strava_token")||null;}
@@ -354,7 +311,7 @@ async function stravaExchangeCode(code){
   try{const snap=await getDoc(_STRAVA_DOC);if(!snap.exists())return;const cs=snap.data().clientSecret;
   const res=await fetch("https://www.strava.com/oauth/token",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({client_id:STRAVA_CLIENT_ID,client_secret:cs,code,grant_type:"authorization_code"})});
   const data=await res.json();if(data.access_token){stravaToken=data.access_token;localStorage.setItem("strava_token",data.access_token);localStorage.setItem("strava_token_exp",data.expires_at);localStorage.setItem("strava_refresh_token",data.refresh_token||"");history.replaceState({},"",location.pathname);await fetchStravaActivities();}}
-  catch(e){console.error("Strava exchange failed",e);syncStatus("Strava auth failed",true);document.getElementById("stravaConnectBtn").style.display="flex";}
+  catch(e){console.error("Strava exchange failed",e);}
 }
 async function stravaRefreshIfNeeded(){
   const exp=parseInt(localStorage.getItem("strava_token_exp")||"0");
@@ -363,7 +320,7 @@ async function stravaRefreshIfNeeded(){
   try{const snap=await getDoc(_STRAVA_DOC);const cs=snap.data().clientSecret;
   const res=await fetch("https://www.strava.com/oauth/token",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({client_id:STRAVA_CLIENT_ID,client_secret:cs,refresh_token:rt,grant_type:"refresh_token"})});
   const data=await res.json();if(data.access_token){stravaToken=data.access_token;localStorage.setItem("strava_token",data.access_token);localStorage.setItem("strava_token_exp",data.expires_at);localStorage.setItem("strava_refresh_token",data.refresh_token);}}
-  catch(e){stravaToken=localStorage.getItem("strava_token");syncStatus("Strava token refresh failed",true);}
+  catch(e){stravaToken=localStorage.getItem("strava_token");}
 }
 async function fetchStravaActivities(){
   if(!stravaToken)return;
@@ -374,7 +331,7 @@ async function fetchStravaActivities(){
   syncStatus("Synced ✓ · "+allActivities.length+" activities");
   document.getElementById("stravaConnectBtn").style.display="none";
   renderQuarter();}
-  catch(e){console.error("Strava fetch failed",e);syncStatus("Strava sync failed",true);document.getElementById("stravaConnectBtn").style.display="flex";}
+  catch(e){console.error("Strava fetch failed",e);}
 }
 
 /* ── date helpers ── */
@@ -408,7 +365,7 @@ function weeklyTotals(weeksBack=0){
   start.setDate(start.getDate()+diff-weeksBack*7);start.setHours(0,0,0,0);const end=new Date(start);end.setDate(end.getDate()+7);
   const acts=weeklyActsByBounds(start,end);
   let secs=0,bike=0,run=0,swim=0,cal=0,runSec=0,runDist=0,swimSec=0,swimDist=0,bikeW=0,bikeWn=0;
-  acts.forEach(a=>{secs+=a.moving_time||0;bike+=isBikeSport(a.sport_type)?a.distance||0:0;run+=isRunSport(a.sport_type)?a.distance||0:0;swim+=isSwimSport(a.sport_type)?a.distance||0:0;cal+=a.kilojoules?Math.round(a.kilojoules*0.239):0;if (isRunSport(a.sport_type)) {runSec+=a.moving_time||0;runDist+=a.distance||0;}if(isSwimSport(a.sport_type)&&a.distance>0){swimSec+=a.moving_time||0;swimDist+=a.distance||0;}if((a.sport_type==="Ride"||a.sport_type==="VirtualRide")&&a.average_watts>0){bikeW+=a.average_watts;bikeWn++;}});
+  acts.forEach(a=>{secs+=a.moving_time||0;bike+=(a.sport_type==="Ride"||a.sport_type==="VirtualRide"||a.sport_type==="EBikeRide")?a.distance||0:0;run+=(a.sport_type==="Run"||a.sport_type==="TrailRun")?a.distance||0:0;swim+=a.sport_type==="Swim"?a.distance||0:0;cal+=a.kilojoules?Math.round(a.kilojoules*0.239):0;if(a.sport_type==="Run"||a.sport_type==="TrailRun"){runSec+=a.moving_time||0;runDist+=a.distance||0;}if(a.sport_type==="Swim"&&a.distance>0){swimSec+=a.moving_time||0;swimDist+=a.distance||0;}if((a.sport_type==="Ride"||a.sport_type==="VirtualRide")&&a.average_watts>0){bikeW+=a.average_watts;bikeWn++;}});
   return{hrs:secs/3600,bike:bike/1000,run:run/1000,swim,cal,runPace:runDist>0?fmtPace(runDist,runSec):"—",swimPace:swimDist>0?fmtPaceSwim(swimDist,swimSec):"—",avgPower:bikeWn>0?Math.round(bikeW/bikeWn):0};
 }
 
@@ -426,7 +383,7 @@ function paceImproved(curr,prev){if(curr==="—"||prev==="—")return"neutral";c
 function rollingPaceAvg(metric,weeks=7){
   let td=0,ts=0;
   for(let i=1;i<=weeks;i++){const now=new Date();const s=new Date(now);const dow=s.getDay();s.setDate(s.getDate()-(dow===0?6:dow-1)-i*7);s.setHours(0,0,0,0);const e=new Date(s);e.setDate(e.getDate()+7);
-  weeklyActsByBounds(s,e).forEach(a=>{const isR=metric==="run"&&isRunSport(a.sport_type);const isS=metric==="swim"&&isSwimSport(a.sport_type);if(isR){td+=a.distance||0;ts+=a.moving_time||0;}if(isS){td+=a.distance||0;ts+=a.moving_time||0;}});}
+  weeklyActsByBounds(s,e).forEach(a=>{const isR=metric==="run"&&(a.sport_type==="Run"||a.sport_type==="TrailRun");const isS=metric==="swim"&&a.sport_type==="Swim";if(isR){td+=a.distance||0;ts+=a.moving_time||0;}if(isS){td+=a.distance||0;ts+=a.moving_time||0;}});}
   return metric==="run"?fmtPace(td,ts):fmtPaceSwim(td,ts);
 }
 function rollingAvg(metric,weeks=7){const vals=[];for(let i=1;i<=weeks;i++){const t=weeklyTotals(i);if(t[metric]>0)vals.push(t[metric]);}return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;}
@@ -459,22 +416,11 @@ function quarterlyTotals(qid){
   let secs=0,bike=0,run=0,swim=0,cal=0,runSec=0,runDist=0,swimSec=0,swimDist=0,bikeW=0,bikeWn=0;
   const weekMap={};
   acts.forEach(a=>{
-    secs+=a.moving_time||0;bike+=isBikeSport(a.sport_type)?a.distance||0:0;run+=isRunSport(a.sport_type)?a.distance||0:0;swim+=isSwimSport(a.sport_type)?a.distance||0:0;cal+=a.kilojoules?Math.round(a.kilojoules*0.239):0;
-    if (isRunSport(a.sport_type)) {
-  runSec += a.moving_time || 0;
-  runDist += a.distance || 0;
-}
-if (isSwimSport(a.sport_type) && a.distance > 0) {
-  swimSec += a.moving_time || 0;
-  swimDist += a.distance || 0;
-}
-if ((a.sport_type === "Ride" || a.sport_type === "VirtualRide") && a.average_watts > 0) {
-  bikeW += a.average_watts;
-  bikeWn++;
-}
+    secs+=a.moving_time||0;bike+=(a.sport_type==="Ride"||a.sport_type==="VirtualRide"||a.sport_type==="EBikeRide")?a.distance||0:0;run+=(a.sport_type==="Run"||a.sport_type==="TrailRun")?a.distance||0:0;swim+=a.sport_type==="Swim"?a.distance||0:0;cal+=a.kilojoules?Math.round(a.kilojoules*0.239):0;
+    if(a.sport_type==="Run"||a.sport_type==="TrailRun"){runSec+=a.moving_time||0;runDist+=a.distance||0;}if(a.sport_type==="Swim"&&a.distance>0){swimSec+=a.moving_time||0;swimDist+=a.distance||0;}if((a.sport_type==="Ride"||a.sport_type==="VirtualRide")&&a.average_watts>0){bikeW+=a.average_watts;bikeWn++;}
     const d=parseLocalDate(a.start_date_local||a.start_date||"");const wk=new Date(d);const dow=wk.getDay();wk.setDate(wk.getDate()-(dow===0?6:dow-1));wk.setHours(0,0,0,0);const wkKey=wk.toISOString().slice(0,10);
     if(!weekMap[wkKey])weekMap[wkKey]={secs:0,bike:0,run:0,swim:0,label:wk.toLocaleDateString("en-GB",{day:"numeric",month:"short"})};
-    weekMap[wkKey].secs+=a.moving_time||0;weekMap[wkKey].bike+=isBikeSport(a.sport_type)?a.distance||0:0;weekMap[wkKey].run+=isRunSport(a.sport_type)?a.distance||0:0;weekMap[wkKey].swim+=isSwimSport(a.sport_type)?a.distance||0:0;
+    weekMap[wkKey].secs+=a.moving_time||0;weekMap[wkKey].bike+=(a.sport_type==="Ride"||a.sport_type==="VirtualRide"||a.sport_type==="EBikeRide")?a.distance||0:0;weekMap[wkKey].run+=(a.sport_type==="Run"||a.sport_type==="TrailRun")?a.distance||0:0;weekMap[wkKey].swim+=a.sport_type==="Swim"?a.distance||0:0;
   });
   const nW=Object.keys(weekMap).length||1;
   return{totalHrs:secs/3600,avgHrs:(secs/3600)/nW,totalBike:bike/1000,totalRun:run/1000,totalSwim:swim,totalCal:cal,avgCal:cal/nW,runPace:runDist>0?fmtPace(runDist,runSec):"—",swimPace:swimDist>0?fmtPaceSwim(swimDist,swimSec):"—",avgPower:bikeWn>0?Math.round(bikeW/bikeWn):0,weekMap,nW};
@@ -536,24 +482,6 @@ function renderQuarter(){
   if(isLive)updateStats(weeks);
 }
 
-function selectedQuarterWeekIndex(weeks){
-  const list=weeks||[]; if(!list.length) return -1;
-  const today=new Date();
-  const qid=currentQtr;
-  for(let i=0;i<list.length;i++){
-    const b=weekBounds(list[i].date,weekYearHint(qid));
-    if(b&&today>=b.start&&today<=b.end) return i;
-  }
-  const currStatus=qtrStatus(qid);
-  if(currStatus==="future") return 0;
-  if(currStatus==="archive") return list.length-1;
-  return -1;
-}
-function scrollToWeekCard(weekId){
-  const el=document.querySelector(`[data-week="${weekId}"]`); if(!el) return;
-  const top=el.getBoundingClientRect().top+window.scrollY-18;
-  window.scrollTo({top,behavior:"smooth"});
-}
 function getQtrWeeks(qid){
   if(!state[qid]){
     if(qtrWeekData[qid]){
@@ -569,10 +497,9 @@ function getQtrWeeks(qid){
 /* ── render ── */
 function renderTimeline(weeks){
   const el=document.getElementById("timeline");el.innerHTML="";
-  const activeIdx=selectedQuarterWeekIndex(weeks);
-  (weeks||[]).forEach((w,idx)=>{const s=document.createElement("button");s.type="button";s.className="seg"+(w.isRace?" is-race":"")+(idx===activeIdx?" current":"");s.style.background=PHASE_COL[w.phase]||"var(--rest)";s.dataset.weekTarget=w.id;s.title=`${w.date} · ${w.phase}`;s.innerHTML=(w.isRace?'<span class="flag">⏱</span>':'')+'<div class="ph">'+w.phase+'</div><div class="dt">'+w.date+'</div>';s.addEventListener("click",()=>{const card=document.querySelector(`[data-week="${w.id}"]`);if(card&&card.classList.contains("collapsed")){const found=weekOf(w.id);if(found)found.w.collapsed=false;card.classList.remove("collapsed");schedule();}scrollToWeekCard(w.id);document.querySelectorAll(".seg.current").forEach(x=>x.classList.remove("current"));s.classList.add("current");});el.appendChild(s);});
+  (weeks||[]).forEach(w=>{const s=document.createElement("div");s.className="seg"+(w.isRace?" is-race":"");s.style.background=PHASE_COL[w.phase]||"var(--rest)";s.innerHTML=(w.isRace?'<span class="flag">⏱</span>':'')+'<div class="ph">'+w.phase+'</div><div class="dt">'+w.date+'</div>';el.appendChild(s);});
 }
-function renderWeekCards(weeks){const c=document.getElementById("weeks");c.innerHTML="";const activeIdx=selectedQuarterWeekIndex(weeks);(weeks||[]).forEach((w,idx)=>{const card=weekCard(w);if(idx===activeIdx)card.classList.add("current-week");c.appendChild(card);});}
+function renderWeekCards(weeks){const c=document.getElementById("weeks");c.innerHTML="";(weeks||[]).forEach(w=>c.appendChild(weekCard(w)));}
 function updateStats(weeks){
   const tally={swim:0,bike:0,run:0,strength:0,brick:0};let tot=0,don=0;
   (weeks||[]).forEach(w=>w.planned.forEach(p=>{if(p.disc==="race"||p.disc==="rest")return;tot++;if(p.done){don++;if(tally[p.disc]!==undefined)tally[p.disc]++;}}));
@@ -626,7 +553,7 @@ function weekCard(w){
     const dist=a.distance||0;const time=a.moving_time||0;const elev=a.total_elevation_gain||0;const hr=a.average_heartrate||null;const cal=a.kilojoules?Math.round(a.kilojoules*0.239):0;
     const stats=[[fmtDist(dist,sport),"dist"],[fmtTime(time),"time"]];
     if(elev>10)stats.push([Math.round(elev)+"m","elev"]);if(hr)stats.push([Math.round(hr)+" bpm","HR"]);if(cal>0)stats.push([cal+" kcal","cal"]);
-    if(isRunSport(sport)&&dist>0&&time>0)stats.push([fmtPace(dist,time)+"/km","pace"]);
+    if((sport==="Run"||sport==="TrailRun")&&dist>0&&time>0)stats.push([fmtPace(dist,time)+"/km","pace"]);
     if(sport==="Swim"&&dist>0&&time>0)stats.push([fmtPaceSwim(dist,time)+"/100m","pace"]);
     stats.forEach(([v,l])=>{const sp=document.createElement("span");sp.className="act-stat";sp.innerHTML=`<b>${v}</b> ${l}`;meta.appendChild(sp);});
     const dt=document.createElement("div");dt.className="act-date";const d=parseLocalDate(a.start_date_local||a.start_date);dt.textContent=d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric"});
@@ -703,7 +630,7 @@ onAuthStateChanged(_auth,async user=>{
   if(user){gate.style.display="none";bar.style.display="flex";document.getElementById("userAvatar").src=user.photoURL||"";document.getElementById("userEmail").textContent=user.displayName||user.email;
     if(!_authed){_authed=true;await loadState();stravaTokenFromCache();
       document.getElementById("qtrLabel").textContent=QUARTERS.find(q=>q.id===currentQtr)?.label||currentQtr;
-      buildQtrMenu();renderQuarter();initPerfSection();
+      buildQtrMenu();renderQuarter();
       const params=new URLSearchParams(location.search);const code=params.get("code");
       if(code)await stravaExchangeCode(code);else{await stravaRefreshIfNeeded();if(stravaToken)await fetchStravaActivities();else document.getElementById("stravaConnectBtn").style.display="flex";}}}
   else{gate.style.display="flex";bar.style.display="none";_authed=false;}
