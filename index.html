@@ -408,7 +408,7 @@ function weeklyTotals(weeksBack=0){
   start.setDate(start.getDate()+diff-weeksBack*7);start.setHours(0,0,0,0);const end=new Date(start);end.setDate(end.getDate()+7);
   const acts=weeklyActsByBounds(start,end);
   let secs=0,bike=0,run=0,swim=0,cal=0,runSec=0,runDist=0,swimSec=0,swimDist=0,bikeW=0,bikeWn=0;
-  acts.forEach(a=>{secs+=a.moving_time||0;bike+=isBikeSport(a.sport_type)?a.distance||0:0;run+=isRunSport(a.sport_type)?a.distance||0:0;swim+=isSwimSport(a.sport_type)?a.distance||0:0;cal+=a.kilojoules?Math.round(a.kilojoules*0.239):0;ifisRunSport(a.sport_type){runSec+=a.moving_time||0;runDist+=a.distance||0;}if(isSwimSport(a.sport_type)&&a.distance>0){swimSec+=a.moving_time||0;swimDist+=a.distance||0;}if((a.sport_type==="Ride"||a.sport_type==="VirtualRide")&&a.average_watts>0){bikeW+=a.average_watts;bikeWn++;}});
+  acts.forEach(a=>{secs+=a.moving_time||0;bike+=isBikeSport(a.sport_type)?a.distance||0:0;run+=isRunSport(a.sport_type)?a.distance||0:0;swim+=isSwimSport(a.sport_type)?a.distance||0:0;cal+=a.kilojoules?Math.round(a.kilojoules*0.239):0;if (isRunSport(a.sport_type)) {runSec+=a.moving_time||0;runDist+=a.distance||0;}if(isSwimSport(a.sport_type)&&a.distance>0){swimSec+=a.moving_time||0;swimDist+=a.distance||0;}if((a.sport_type==="Ride"||a.sport_type==="VirtualRide")&&a.average_watts>0){bikeW+=a.average_watts;bikeWn++;}});
   return{hrs:secs/3600,bike:bike/1000,run:run/1000,swim,cal,runPace:runDist>0?fmtPace(runDist,runSec):"—",swimPace:swimDist>0?fmtPaceSwim(swimDist,swimSec):"—",avgPower:bikeWn>0?Math.round(bikeW/bikeWn):0};
 }
 
