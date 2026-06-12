@@ -460,7 +460,18 @@ function quarterlyTotals(qid){
   const weekMap={};
   acts.forEach(a=>{
     secs+=a.moving_time||0;bike+=isBikeSport(a.sport_type)?a.distance||0:0;run+=isRunSport(a.sport_type)?a.distance||0:0;swim+=isSwimSport(a.sport_type)?a.distance||0:0;cal+=a.kilojoules?Math.round(a.kilojoules*0.239):0;
-    ifisRunSport(a.sport_type){runSec+=a.moving_time||0;runDist+=a.distance||0;}if(isSwimSport(a.sport_type)&&a.distance>0){swimSec+=a.moving_time||0;swimDist+=a.distance||0;}if((a.sport_type==="Ride"||a.sport_type==="VirtualRide")&&a.average_watts>0){bikeW+=a.average_watts;bikeWn++;}
+    if (isRunSport(a.sport_type)) {
+  runSec += a.moving_time || 0;
+  runDist += a.distance || 0;
+}
+if (isSwimSport(a.sport_type) && a.distance > 0) {
+  swimSec += a.moving_time || 0;
+  swimDist += a.distance || 0;
+}
+if ((a.sport_type === "Ride" || a.sport_type === "VirtualRide") && a.average_watts > 0) {
+  bikeW += a.average_watts;
+  bikeWn++;
+}
     const d=parseLocalDate(a.start_date_local||a.start_date||"");const wk=new Date(d);const dow=wk.getDay();wk.setDate(wk.getDate()-(dow===0?6:dow-1));wk.setHours(0,0,0,0);const wkKey=wk.toISOString().slice(0,10);
     if(!weekMap[wkKey])weekMap[wkKey]={secs:0,bike:0,run:0,swim:0,label:wk.toLocaleDateString("en-GB",{day:"numeric",month:"short"})};
     weekMap[wkKey].secs+=a.moving_time||0;weekMap[wkKey].bike+=isBikeSport(a.sport_type)?a.distance||0:0;weekMap[wkKey].run+=isRunSport(a.sport_type)?a.distance||0:0;weekMap[wkKey].swim+=isSwimSport(a.sport_type)?a.distance||0:0;
