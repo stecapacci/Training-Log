@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v20 -->
+<!-- v21 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training Log — Stefano</title>
@@ -439,7 +439,7 @@ function renderQuarter(){
   const ctrl=document.getElementById("controls");
   if(isLive){
     banner.className="archive-banner";ts.style.display="";
-    if(ttl)document.getElementById("tableTitle").textContent="Training — last 8 weeks";
+    const ttlEl=document.getElementById("tableTitle");if(ttlEl)ttlEl.textContent="Training — last 8 weeks";
     // restore live trend cards
     document.getElementById("trendsRow").innerHTML=`
       <div class="trend-card neutral" id="tc-load"><div class="tc-label">Weekly load</div><div class="tc-val" id="tv-load">—</div><div class="tc-sub" id="ts-load">hrs training</div></div>
@@ -455,13 +455,20 @@ function renderQuarter(){
     ts.style.display="";if(cb)cb.style.display="none";ctrl.style.display="none";
     renderQuarterlyDashboard(currentQtr);
   }
-  const ttl2=document.getElementById("tableTitle");if(ttl2&&isLive)ttl2.textContent="Training — last 8 weeks";
+  // table title already set above
   const weeks=getQtrWeeks(currentQtr);renderTimeline(weeks);renderWeekCards(weeks);
   if(isLive)updateStats(weeks);
 }
 
 function getQtrWeeks(qid){
-  if(!state[qid])state[qid]=buildQtrWeeks(qid);
+  if(!state[qid]){
+    if(qtrWeekData[qid]){
+      state[qid]=JSON.parse(JSON.stringify(qtrWeekData[qid])).map(w=>{w.id=uid();return w;});
+    } else {
+      const qtr=QUARTERS.find(q=>q.id===qid);
+      state[qid]=(qtr?qtr.weeks:[]).map(date=>({id:uid(),date,phase:"Base",collapsed:true,focus:"",planned:[P("run","Run"),P("bike","Bike"),P("swim","Swim")],comments:"",habits:emptyHabits()}));
+    }
+  }
   return state[qid];
 }
 
@@ -479,7 +486,14 @@ function updateStats(weeks){
   const dc=document.getElementById("discCounts");dc.innerHTML="";
   [["swim","Swim"],["bike","Bike"],["run","Run"],["strength","Stren"],["brick","Brick"]].forEach(([k,lab])=>{const el=document.createElement("div");el.className="dc";el.innerHTML='<span class="dot" style="background:'+DISC[k].c+'"></span><b>'+tally[k]+'</b><small>'+lab+'</small>';dc.appendChild(el);});
 }
-function weekOf(id){for(const qid of Object.keys(state)){const w=state[qid].find(w=>w.id===id);if(w)return{w,qid};}return null;}
+function weekOf(id){
+  for(const qid of Object.keys(state)){
+    if(!Array.isArray(state[qid]))continue;
+    const w=state[qid].find(w=>w.id===id);
+    if(w)return{w,qid};
+  }
+  return null;
+}
 
 function weekCard(w){
   const qid=currentQtr;
@@ -607,15 +621,21 @@ onAuthStateChanged(_auth,async user=>{
 ════════════════════════════════════════ */
 function buildDefaultState(){
   const s={};
-  QUARTERS.forEach(q=>{s[q.id]=buildQtrWeeks(q.id);});
+  QUARTERS.forEach(q=>{
+    if(qtrWeekData[q.id]){
+      // deep clone with fresh ids so each load gets stable unique ids
+      s[q.id]=JSON.parse(JSON.stringify(qtrWeekData[q.id])).map(w=>{w.id=uid();return w;});
+    } else {
+      s[q.id]=q.weeks.map(date=>({id:uid(),date,phase:"Base",collapsed:true,focus:"",planned:[P("run","Run"),P("bike","Bike"),P("swim","Swim")],comments:"",habits:emptyHabits()}));
+    }
+  });
   return s;
 }
 
 function buildQtrWeeks(qid){
   const qtr=QUARTERS.find(q=>q.id===qid);if(!qtr)return[];
-  // If state already has this quarter saved, return that
-  if(state&&state[qid])return state[qid];
-  return qtrWeekData[qid]||qtr.weeks.map(date=>({id:uid(),date,phase:"Base",collapsed:true,focus:"",planned:[P("run","Run"),P("bike","Bike"),P("swim","Swim")],comments:"",habits:emptyHabits()}));
+  if(qtrWeekData[qid])return qtrWeekData[qid].map(w=>({...w,id:uid()}));
+  return qtr.weeks.map(date=>({id:uid(),date,phase:"Base",collapsed:true,focus:"",planned:[P("run","Run"),P("bike","Bike"),P("swim","Swim")],comments:"",habits:emptyHabits()}));
 }
 
 /* ════════════════════════════════════════
