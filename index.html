@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v33 -->
+<!-- v34 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training Log — Stefano</title>
@@ -326,7 +326,7 @@ function updateExportBtn(){
   const btn=document.getElementById("exportBtn");if(!btn)return;
   const n=allActivities.length;
   btn.textContent="↓ Export JSON · "+n+" activities";
-  btn.style.display=n>0?"":"none";
+  btn.style.display=n>0?"block":"none";
 }
 function exportJSON(){
   const payload={exportedAt:new Date().toISOString(),state,activities:allActivities};
