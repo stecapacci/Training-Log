@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v30 -->
+<!-- v31 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training Log — Stefano</title>
@@ -43,7 +43,10 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .strava-btn:hover{background:#e04400}
 .sync-status{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);margin-bottom:10px;min-height:14px}
 .sync-status.err{color:var(--run)}
-.archive-banner{background:#F7F9FA;border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-soft);display:none}
+.this-wk-btn{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:clamp(22px,4vw,34px);letter-spacing:-.02em;background:none;border:none;cursor:pointer;color:var(--ink);padding:0;line-height:1.1;white-space:nowrap}
+.this-wk-btn:hover{color:var(--swim)}
+.this-wk-btn.active{color:var(--swim)}
+.nav-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-soft);display:none}
 .archive-banner.show{display:block}
 .trends{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
 .trend-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow)}
@@ -73,6 +76,8 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .timeline{display:flex;gap:3px;min-width:500px}
 .seg{flex:1;min-width:38px;border-radius:7px;padding:7px 5px;color:#fff;position:relative;transition:transform .15s ease;cursor:default}
 .seg:hover{transform:translateY(-2px)}
+.seg.clickable{cursor:pointer}
+.seg.clickable:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(21,25,31,.18)}
 .seg .ph{font-family:"JetBrains Mono",monospace;font-size:9px;text-transform:uppercase;letter-spacing:.04em;opacity:.9}
 .seg .dt{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:11px;margin-top:2px}
 .seg.is-race{outline:2px solid var(--ink);outline-offset:1px}
@@ -169,13 +174,16 @@ button.ghost{background:none;color:var(--ink)}button.ghost:hover{background:#fff
 <div class="wrap">
   <div class="hdr">
     <div>
-      <div class="eyebrow">Triathlon training log · Stefano</div>
-      <div class="qtr-wrap">
-        <button class="qtr-btn" id="qtrBtn">
-          <span id="qtrLabel">Q2 2026</span>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <div class="qtr-menu" id="qtrMenu"></div>
+      <div class="eyebrow">Training Log — Stefano</div>
+      <div class="nav-row">
+        <button class="this-wk-btn" id="homeBtn">This week</button>
+        <div class="qtr-wrap">
+          <button class="qtr-btn" id="qtrBtn">
+            <span id="qtrLabel">Q2 2026</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="qtr-menu" id="qtrMenu"></div>
+        </div>
       </div>
     </div>
     <div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px">
@@ -265,7 +273,7 @@ function currentQtrId(){
 }
 function qtrStatus(qid){const curr=qtrSortVal(currentQtrId()), val=qtrSortVal(qid);return val===curr?"live":(val<curr?"archive":"future");}
 
-let state={}, saveTimer, allActivities=[], currentQtr=currentQtrId(), _authed=false;
+let state={}, saveTimer, allActivities=[], currentQtr=currentQtrId(), _authed=false, viewMode="home";
 
 function uid(){return Math.random().toString(36).slice(2,9)}
 function P(disc,text,done){return{id:uid(),disc,text,done:!!done}}
@@ -341,7 +349,7 @@ async function fetchStravaActivities(){
   allActivities=allActivities.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date||"");return d>=new Date(2025,6,1);});
   syncStatus("Synced ✓ · "+allActivities.length+" activities");
   document.getElementById("stravaConnectBtn").style.display="none";
-  renderQuarter();}
+  if(viewMode==="home")renderHome();else renderQuarter();}
   catch(e){console.error("Strava fetch failed",e);}
 }
 
@@ -457,15 +465,75 @@ function buildQtrMenu(){
     const status=qtrStatus(q.id);
     const opt=document.createElement("div");opt.className="qtr-opt"+(q.id===currentQtr?" active":"");
     opt.innerHTML=`${q.label} <span class="qtr-badge ${status}">${status==="live"?"Live":status==="future"?"Future":"Archive"}</span>`;
-    opt.addEventListener("click",()=>{currentQtr=q.id;menu.classList.remove("show");document.getElementById("qtrBtn").classList.remove("open");document.getElementById("qtrLabel").textContent=q.label;buildQtrMenu();renderQuarter();});
+    opt.addEventListener("click",()=>{currentQtr=q.id;menu.classList.remove("show");document.getElementById("qtrBtn").classList.remove("open");document.getElementById("qtrLabel").textContent=q.label;document.getElementById("homeBtn").classList.remove("active");buildQtrMenu();renderQuarter();});
     menu.appendChild(opt);
   });
 }
 document.getElementById("qtrBtn").addEventListener("click",e=>{e.stopPropagation();document.getElementById("qtrBtn").classList.toggle("open");document.getElementById("qtrMenu").classList.toggle("show");});
+document.getElementById("homeBtn").addEventListener("click",()=>{renderHome();});
 document.addEventListener("click",()=>{document.getElementById("qtrMenu").classList.remove("show");document.getElementById("qtrBtn").classList.remove("open");});
 
+/* ── navigation ── */
+function navigateToWeek(qid,weekId){
+  if(qid!==currentQtr||viewMode==="home"){
+    currentQtr=qid;
+    viewMode="quarter";
+    document.getElementById("qtrLabel").textContent=QUARTERS.find(q=>q.id===qid)?.label||qid;
+    buildQtrMenu();
+    document.getElementById("homeBtn").classList.remove("active");
+    renderQuarter();
+  }
+  requestAnimationFrame(()=>{
+    setTimeout(()=>{
+      const el=document.querySelector(`[data-week="${weekId}"]`);
+      if(el){el.scrollIntoView({behavior:"smooth",block:"start"});
+        el.style.outline="2px solid var(--swim)";el.style.outlineOffset="3px";
+        setTimeout(()=>{el.style.outline="";el.style.outlineOffset="";},1800);}
+    },80);
+  });
+}
+
+function getCurrentAndNextWeek(){
+  const liveQtr=QUARTERS.find(q=>qtrStatus(q.id)==="live");
+  if(!liveQtr)return{weeks:[],qid:currentQtrId(),allWeeks:[]};
+  const allWeeks=getQtrWeeks(liveQtr.id);
+  const now=new Date();now.setHours(0,0,0,0);
+  const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  let currIdx=0;
+  allWeeks.forEach((w,i)=>{
+    const [dayStr,monStr]=w.date.split("-");
+    const d=new Date(qtrYear(liveQtr.id),months[monStr],parseInt(dayStr,10),0,0,0,0);
+    if(d<=now)currIdx=i;
+  });
+  return{weeks:allWeeks.slice(currIdx,currIdx+2),qid:liveQtr.id,allWeeks};
+}
+
+function renderHome(){
+  viewMode="home";
+  document.getElementById("homeBtn").classList.add("active");
+  const liveQid=(QUARTERS.find(q=>qtrStatus(q.id)==="live")||QUARTERS[1]).id;
+  const {weeks:twoWeeks,allWeeks}=getCurrentAndNextWeek();
+  const banner=document.getElementById("archiveBanner");
+  banner.className="archive-banner";
+  const ts=document.getElementById("trendsSection");
+  const cb=document.getElementById("compBar");
+  ts.style.display="";if(cb)cb.style.display="";
+  const ttlEl=document.getElementById("tableTitle");if(ttlEl)ttlEl.textContent="Training — last month";
+  document.getElementById("trendsRow").innerHTML=`
+    <div class="trend-card neutral" id="tc-load"><div class="tc-label">Weekly load</div><div class="tc-val" id="tv-load">—</div><div class="tc-sub" id="ts-load">hrs training</div></div>
+    <div class="trend-card neutral" id="tc-calories"><div class="tc-label">Calories burned</div><div class="tc-val" id="tv-calories">—</div><div class="tc-sub" id="ts-calories">kcal this week</div></div>
+    <div class="trend-card neutral" id="tc-runpace"><div class="tc-label">Run pace</div><div class="tc-val" id="tv-runpace">—</div><div class="tc-sub" id="ts-runpace">7-wk avg min/km</div></div>
+    <div class="trend-card neutral" id="tc-power"><div class="tc-label">Bike power</div><div class="tc-val" id="tv-power">—</div><div class="tc-sub" id="ts-power">7-wk avg watts</div></div>
+    <div class="trend-card neutral" id="tc-swimpace"><div class="tc-label">Swim pace</div><div class="tc-val" id="tv-swimpace">—</div><div class="tc-sub" id="ts-swimpace">7-wk avg /100m</div></div>`;
+  updateTrends();renderWeeklyTable();
+  renderTimeline(allWeeks,liveQid);
+  updateStats(allWeeks);
+  renderWeekCards(twoWeeks,liveQid);
+}
+
 function renderQuarter(){
-  const qtr=QUARTERS.find(q=>q.id===currentQtr);
+  viewMode="quarter";
+  document.getElementById("homeBtn").classList.remove("active");
   const status=qtrStatus(currentQtr);
   const isLive=status==="live";
   const isFuture=status==="future";
@@ -474,7 +542,6 @@ function renderQuarter(){
   if(isLive){
     banner.className="archive-banner";ts.style.display="";
     const ttlEl=document.getElementById("tableTitle");if(ttlEl)ttlEl.textContent="Training — last month";
-    // restore live trend cards
     document.getElementById("trendsRow").innerHTML=`
       <div class="trend-card neutral" id="tc-load"><div class="tc-label">Weekly load</div><div class="tc-val" id="tv-load">—</div><div class="tc-sub" id="ts-load">hrs training</div></div>
       <div class="trend-card neutral" id="tc-calories"><div class="tc-label">Calories burned</div><div class="tc-val" id="tv-calories">—</div><div class="tc-sub" id="ts-calories">kcal this week</div></div>
@@ -489,7 +556,9 @@ function renderQuarter(){
     ts.style.display="";if(cb)cb.style.display="none";
     renderQuarterlyDashboard(currentQtr);
   }
-  const weeks=getQtrWeeks(currentQtr);renderTimeline(weeks);renderWeekCards(weeks);
+  const weeks=getQtrWeeks(currentQtr);
+  renderTimeline(weeks,currentQtr);
+  renderWeekCards(weeks);
   if(isLive)updateStats(weeks);
 }
 
@@ -502,16 +571,22 @@ function getQtrWeeks(qid){
       state[qid]=(qtr?qtr.weeks:[]).map(date=>({id:uid(),date,phase:"Base",collapsed:true,focus:"",planned:[P("run","Run"),P("bike","Bike"),P("swim","Swim")],comments:"",habits:emptyHabits()}));
     }
   }
-  normalizePreMarchWeeks(state[qid],qid);
   return state[qid];
 }
 
 /* ── render ── */
-function renderTimeline(weeks){
+function renderTimeline(weeks,qid){
   const el=document.getElementById("timeline");el.innerHTML="";
-  (weeks||[]).forEach(w=>{const s=document.createElement("div");s.className="seg"+(w.isRace?" is-race":"");s.style.background=PHASE_COL[w.phase]||"var(--rest)";s.innerHTML=(w.isRace?'<span class="flag">⏱</span>':'')+'<div class="ph">'+w.phase+'</div><div class="dt">'+w.date+'</div>';el.appendChild(s);});
+  (weeks||[]).forEach(w=>{
+    const s=document.createElement("div");
+    s.className="seg clickable"+(w.isRace?" is-race":"");
+    s.style.background=PHASE_COL[w.phase]||"var(--rest)";
+    s.innerHTML=(w.isRace?'<span class="flag">⏱</span>':'')+'<div class="ph">'+w.phase+'</div><div class="dt">'+w.date+'</div>';
+    s.addEventListener("click",()=>navigateToWeek(qid,w.id));
+    el.appendChild(s);
+  });
 }
-function renderWeekCards(weeks){const c=document.getElementById("weeks");c.innerHTML="";(weeks||[]).forEach(w=>c.appendChild(weekCard(w)));}
+function renderWeekCards(weeks,qid){const c=document.getElementById("weeks");c.innerHTML="";(weeks||[]).forEach(w=>c.appendChild(weekCard(w,qid||currentQtr)));}
 function updateStats(weeks){
   const tally={swim:0,bike:0,run:0,strength:0,brick:0};let tot=0,don=0;
   (weeks||[]).forEach(w=>w.planned.forEach(p=>{if(p.disc==="race"||p.disc==="rest")return;tot++;if(p.done){don++;if(tally[p.disc]!==undefined)tally[p.disc]++;}}));
@@ -529,8 +604,8 @@ function weekOf(id){
   return null;
 }
 
-function weekCard(w){
-  const qid=currentQtr;
+function weekCard(w,qid){
+  qid=qid||currentQtr;
   const hasHabits=qid==="q2-2026"||qid==="q3-2026";
   const total=w.planned.filter(p=>p.disc!=="race"&&p.disc!=="rest").length;
   const done=w.planned.filter(p=>p.done&&p.disc!=="race"&&p.disc!=="rest").length;
@@ -607,7 +682,7 @@ document.addEventListener("click",e=>{
   else if(a==="toggle"&&w){const it=w.planned.find(p=>p.id===act.closest("[data-item]").dataset.item);if(it){it.done=act.checked;act.closest(".pitem").classList.toggle("done",it.done);updateStats(getQtrWeeks(currentQtr));uwp(weekEl,w);schedule();}}
   else if(a==="cycle"&&w){const row=act.closest("[data-item]");const it=w.planned.find(p=>p.id===row.dataset.item);if(it){const i=CYCLE.indexOf(it.disc);it.disc=CYCLE[(i+1)%CYCLE.length];const d=DISC[it.disc];act.style.background=d.c;act.textContent=d.label;updateStats(getQtrWeeks(currentQtr));uwp(weekEl,w);schedule();}}
   else if(a==="del-sess"&&w){const row=act.closest("[data-item]");w.planned=w.planned.filter(p=>p.id!==row.dataset.item);row.remove();updateStats(getQtrWeeks(currentQtr));uwp(weekEl,w);schedule();}
-  else if(a==="add-sess"&&w){w.planned.push(P("run","New session"));weekEl.replaceWith(weekCard(w));updateStats(getQtrWeeks(currentQtr));schedule();}
+  else if(a==="add-sess"&&w){w.planned.push(P("run","New session"));weekEl.replaceWith(weekCard(w,qid));updateStats(getQtrWeeks(currentQtr));schedule();}
 });
 function uwp(weekEl,w){const tot=w.planned.filter(p=>p.disc!=="race"&&p.disc!=="rest").length;const don=w.planned.filter(p=>p.done&&p.disc!=="race"&&p.disc!=="rest").length;const pr=weekEl.querySelector(".wk-progress");if(pr)pr.textContent=don+"/"+tot;}
 document.addEventListener("input",e=>{
@@ -632,30 +707,13 @@ onAuthStateChanged(_auth,async user=>{
   if(user){gate.style.display="none";bar.style.display="flex";document.getElementById("userAvatar").src=user.photoURL||"";document.getElementById("userEmail").textContent=user.displayName||user.email;
     if(!_authed){_authed=true;await loadState();stravaTokenFromCache();
       document.getElementById("qtrLabel").textContent=QUARTERS.find(q=>q.id===currentQtr)?.label||currentQtr;
-      buildQtrMenu();renderQuarter();
+      buildQtrMenu();renderHome();
       const params=new URLSearchParams(location.search);const code=params.get("code");
       if(code)await stravaExchangeCode(code);else{await stravaRefreshIfNeeded();if(stravaToken)await fetchStravaActivities();else document.getElementById("stravaConnectBtn").style.display="flex";}}}
   else{gate.style.display="flex";bar.style.display="none";_authed=false;}
 });
 
-function quarterWeekDate(dateStr,qid){
-  const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-  const [dayStr,monStr]=dateStr.split("-");
-  return new Date(qtrYear(qid),months[monStr],parseInt(dayStr,10),0,0,0,0);
-}
-function normalizePreMarchWeeks(weeks,qid){
-  const cutoff=new Date(2026,2,2,0,0,0,0); // 02-Mar-2026 not included
-  (weeks||[]).forEach(w=>{
-    const d=quarterWeekDate(w.date,qid);
-    if(d<cutoff){
-      w.phase="Base";
-      w.focus="No structured training.";
-      w.planned=[P("run","Run"),P("bike","Bike"),P("swim","Swim")];
-    }
-  });
-  return weeks;
-}
-function normalizeAllState(){Object.keys(state).forEach(qid=>{if(Array.isArray(state[qid]))normalizePreMarchWeeks(state[qid],qid);});}
+function normalizeAllState(){/* no-op: trust Firebase data as-is */}
 /* ════════════════════════════════════════
    DEFAULT STATE BUILDER
    Called once on first load, then Firebase
