@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v32 -->
+<!-- v33 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training Log — Stefano</title>
@@ -43,6 +43,8 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .strava-btn:hover{background:#e04400}
 .sync-status{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);margin-bottom:10px;min-height:14px}
 .sync-status.err{color:var(--run)}
+.export-btn{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);background:none;border:none;cursor:pointer;padding:0;text-align:right;display:none}
+.export-btn:hover{color:var(--ink);text-decoration:underline}
 .this-wk-btn{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:clamp(22px,4vw,34px);letter-spacing:-.02em;background:none;border:none;cursor:pointer;color:var(--ink);padding:0;line-height:1.1;white-space:nowrap}
 .this-wk-btn:hover{color:var(--swim)}
 .this-wk-btn.active{color:var(--swim)}
@@ -196,6 +198,7 @@ button.ghost{background:none;color:var(--ink)}button.ghost:hover{background:#fff
         <button class="signout-btn" id="signOutBtn">Sign out</button>
       </div>
       <div class="sync-status" id="syncStatus">Connecting…</div>
+      <button class="export-btn" id="exportBtn">↓ Export JSON</button>
     </div>
   </div>
 
@@ -318,6 +321,26 @@ async function persist(silent){
 function schedule(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>persist(),600);}
 function flash(){const f=document.getElementById("flash");f.textContent="Saved ✓";f.classList.add("show");clearTimeout(f._t);f._t=setTimeout(()=>f.classList.remove("show"),1100);}
 
+/* ── Export ── */
+function updateExportBtn(){
+  const btn=document.getElementById("exportBtn");if(!btn)return;
+  const n=allActivities.length;
+  btn.textContent="↓ Export JSON · "+n+" activities";
+  btn.style.display=n>0?"":"none";
+}
+function exportJSON(){
+  const payload={exportedAt:new Date().toISOString(),state,activities:allActivities};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  const d=new Date();
+  const stamp=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  a.href=url;a.download="training-log-"+stamp+".json";
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1000);
+}
+document.getElementById("exportBtn").addEventListener("click",exportJSON);
+
 /* ── Strava ── */
 function stravaTokenFromCache(){const exp=parseInt(localStorage.getItem("strava_token_exp")||"0");if(Date.now()/1000<exp-300)stravaToken=localStorage.getItem("strava_token")||null;}
 let stravaToken=null;
@@ -345,6 +368,7 @@ async function fetchStravaActivities(){
   allActivities=allActivities.filter(a=>{const d=parseLocalDate(a.start_date_local||a.start_date||"");return d>=new Date(2025,6,1);});
   syncStatus("Synced ✓ · "+allActivities.length+" activities");
   document.getElementById("stravaConnectBtn").style.display="none";
+  updateExportBtn();
   if(viewMode==="home")renderHome();else renderQuarter();}
   catch(e){console.error("Strava fetch failed",e);}
 }
