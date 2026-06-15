@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- v31 -->
+<!-- v32 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Training Log — Stefano</title>
@@ -46,8 +46,8 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .this-wk-btn{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:clamp(22px,4vw,34px);letter-spacing:-.02em;background:none;border:none;cursor:pointer;color:var(--ink);padding:0;line-height:1.1;white-space:nowrap}
 .this-wk-btn:hover{color:var(--swim)}
 .this-wk-btn.active{color:var(--swim)}
-.nav-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-soft);display:none}
-.archive-banner.show{display:block}
+.nav-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+
 .trends{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
 .trend-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow)}
 .trend-card .tc-label{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-soft);margin-bottom:4px}
@@ -154,7 +154,6 @@ button.ghost{background:none;color:var(--ink)}button.ghost:hover{background:#fff
 .google-btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:13px 20px;border:1px solid var(--line-strong);border-radius:10px;background:#fff;cursor:pointer;font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:15px;color:var(--ink);transition:box-shadow .15s}
 .google-btn:hover{box-shadow:0 2px 12px rgba(21,25,31,.12)}
 .auth-error{margin-top:14px;font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--run);min-height:18px}
-.note{font-size:12.5px;color:var(--ink-soft);margin-top:24px;line-height:1.6}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 </style>
@@ -200,8 +199,6 @@ button.ghost{background:none;color:var(--ink)}button.ghost:hover{background:#fff
     </div>
   </div>
 
-  <div class="archive-banner" id="archiveBanner"></div>
-
   <div id="trendsSection">
     <div class="trends" id="trendsRow">
       <div class="trend-card neutral" id="tc-load"><div class="tc-label">Weekly load</div><div class="tc-val" id="tv-load">—</div><div class="tc-sub" id="ts-load">hrs training</div></div>
@@ -222,7 +219,6 @@ button.ghost{background:none;color:var(--ink)}button.ghost:hover{background:#fff
   </div>
 
   <div class="weeks" id="weeks"></div>
-  <p class="note">Synced across devices via Firebase · Strava auto-populates · All quarters are editable</p>
 </div>
 <div class="save-flash" id="flash">Saved ✓</div>
 
@@ -513,8 +509,6 @@ function renderHome(){
   document.getElementById("homeBtn").classList.add("active");
   const liveQid=(QUARTERS.find(q=>qtrStatus(q.id)==="live")||QUARTERS[1]).id;
   const {weeks:twoWeeks,allWeeks}=getCurrentAndNextWeek();
-  const banner=document.getElementById("archiveBanner");
-  banner.className="archive-banner";
   const ts=document.getElementById("trendsSection");
   const cb=document.getElementById("compBar");
   ts.style.display="";if(cb)cb.style.display="";
@@ -534,32 +528,14 @@ function renderHome(){
 function renderQuarter(){
   viewMode="quarter";
   document.getElementById("homeBtn").classList.remove("active");
-  const status=qtrStatus(currentQtr);
-  const isLive=status==="live";
-  const isFuture=status==="future";
-  const banner=document.getElementById("archiveBanner");
-  const ts=document.getElementById("trendsSection");const cb=document.getElementById("compBar");
-  if(isLive){
-    banner.className="archive-banner";ts.style.display="";
-    const ttlEl=document.getElementById("tableTitle");if(ttlEl)ttlEl.textContent="Training — last month";
-    document.getElementById("trendsRow").innerHTML=`
-      <div class="trend-card neutral" id="tc-load"><div class="tc-label">Weekly load</div><div class="tc-val" id="tv-load">—</div><div class="tc-sub" id="ts-load">hrs training</div></div>
-      <div class="trend-card neutral" id="tc-calories"><div class="tc-label">Calories burned</div><div class="tc-val" id="tv-calories">—</div><div class="tc-sub" id="ts-calories">kcal this week</div></div>
-      <div class="trend-card neutral" id="tc-runpace"><div class="tc-label">Run pace</div><div class="tc-val" id="tv-runpace">—</div><div class="tc-sub" id="ts-runpace">7-wk avg min/km</div></div>
-      <div class="trend-card neutral" id="tc-power"><div class="tc-label">Bike power</div><div class="tc-val" id="tv-power">—</div><div class="tc-sub" id="ts-power">7-wk avg watts</div></div>
-      <div class="trend-card neutral" id="tc-swimpace"><div class="tc-label">Swim pace</div><div class="tc-val" id="tv-swimpace">—</div><div class="tc-sub" id="ts-swimpace">7-wk avg /100m</div></div>`;
-    if(cb)cb.style.display="";
-    const weeks=getQtrWeeks(currentQtr);updateStats(weeks);updateTrends();renderWeeklyTable();
-  } else {
-    if(isFuture){banner.className="archive-banner show";banner.textContent="🔮 Future quarter — training plan only. Strava will auto-populate as you record activities.";}
-    else{banner.className="archive-banner show";banner.textContent="📁 Archive — editable. Comments and planned sessions can be updated. Strava activities load automatically.";}
-    ts.style.display="";if(cb)cb.style.display="none";
-    renderQuarterlyDashboard(currentQtr);
-  }
+  const ts=document.getElementById("trendsSection");
+  const cb=document.getElementById("compBar");
+  ts.style.display="";
+  if(cb)cb.style.display="none";
+  renderQuarterlyDashboard(currentQtr);
   const weeks=getQtrWeeks(currentQtr);
   renderTimeline(weeks,currentQtr);
   renderWeekCards(weeks);
-  if(isLive)updateStats(weeks);
 }
 
 function getQtrWeeks(qid){
