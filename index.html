@@ -133,15 +133,11 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .week{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--rail,var(--rest));border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
 .week.race{--rail:var(--race);border-color:#E7D9A0;background:linear-gradient(180deg,#FCF8E9,#FBFCFD 60%)}
 .wk-head{display:flex;align-items:center;gap:12px;padding:14px 16px;user-select:none}
-.wk-head.collapsible{cursor:pointer}
 .wk-date{font-family:"JetBrains Mono",monospace;font-weight:700;font-size:15px;letter-spacing:.02em;min-width:74px}
 .wk-sub{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--ink-soft);letter-spacing:.06em}
 .phase-tag{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;padding:4px 9px;border-radius:999px;color:#fff;white-space:nowrap;border:none;cursor:pointer}
 .wk-meta{margin-left:auto;display:flex;align-items:center;gap:12px}
 .wk-progress{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-soft)}
-.caret{border:none;background:none;cursor:pointer;color:var(--ink-soft);font-size:15px;padding:4px;line-height:1;transition:transform .15s}
-.week.collapsed .caret{transform:rotate(-90deg)}
-.week.collapsed .wk-body{display:none}
 .wk-body{padding:2px 16px 18px}
 .focus{font-size:13.5px;color:var(--ink-soft);font-style:italic;border-left:2px solid var(--line-strong);padding:2px 0 2px 12px;margin:2px 0 14px}
 .focus:focus{outline:none;color:var(--ink);border-left-color:var(--ink)}
@@ -192,7 +188,6 @@ textarea::placeholder{color:#A4AEB7}
 .habit-inp{width:100%;border:none;background:none;font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--ink);text-align:center;padding:4px 2px;border-bottom:1px solid transparent}
 .habit-inp:focus{outline:none;border-bottom-color:var(--line-strong)}
 .habit-inp::placeholder{color:#C8D0D8}
-.controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 .save-flash{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;font-family:"JetBrains Mono",monospace;font-size:12px;padding:9px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:.25s;z-index:60}
 .save-flash.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .save-flash.bad{background:var(--bad)}
@@ -350,7 +345,6 @@ let viewMode="home";             // "home" | "month"
 let currentMonth=null;           // "YYYY-MM"
 let _backfillRunning=false;
 let _rateLimited=false;          // Strava 429 seen this session
-let _listRequests=0;             // Strava requests spent on the activity list
 let _pendingRender=false;        // a re-render deferred because the user is typing
 let _roWarned=false;             // read-only warning already shown
 
@@ -521,7 +515,6 @@ function normWeek(raw,isoKey){
     phase: typeof r.phase==="string"&&r.phase ? r.phase : "Base",
     focus: typeof r.focus==="string" ? r.focus : "",
     comments: typeof r.comments==="string" ? r.comments : "",
-    collapsed: r.collapsed===undefined ? true : !!r.collapsed,
     isRace: !!r.isRace,
     planned: normPlanned(r.planned),
     habits: normHabits(r.habits)
@@ -603,6 +596,23 @@ function pushLocalBackup(){
     localStorage.setItem(LS_BACKUP,JSON.stringify(arr));
   }catch(e){/* quota — non-fatal */}
 }
+/** Last-resort local read: the current mirror, else the newest rolling backup. */
+function readLocalFallback(){
+  try{
+    const raw=localStorage.getItem(LS_STATE);
+    if(raw) return {payload:JSON.parse(raw),from:"your last local copy"};
+  }catch(_){}
+  try{
+    const arr=JSON.parse(localStorage.getItem(LS_BACKUP)||"[]");
+    if(Array.isArray(arr)&&arr.length){
+      const last=arr[arr.length-1];
+      if(last&&last.payload){
+        return {payload:last.payload,from:"a local backup from "+String(last.at||"").slice(0,10)};
+      }
+    }
+  }catch(_){}
+  return null;
+}
 
 async function loadState(){
   syncStatus("Loading…");
@@ -655,11 +665,11 @@ async function loadState(){
     // READ FAILED. Do not write anything, ever, this session.
     console.error("Load failed:",e);
     _loadOk=false;
-    const raw=localStorage.getItem(LS_STATE);
-    if(raw){
-      try{ state=normState(JSON.parse(raw)); }catch(_){ state=blankState(); }
-      banner("Could not reach the database. Showing your last local copy — "+
-             "editing is disabled so nothing overwrites the cloud data. Reload when back online.",true);
+    const local=readLocalFallback();
+    if(local){
+      try{ state=normState(local.payload); }catch(_){ state=blankState(); }
+      banner("Could not reach the database. Showing "+local.from+" — editing is disabled "+
+             "so nothing overwrites the cloud data. Reload when back online.",true);
       syncStatus("Offline — read only",'err');
     }else{
       state=blankState();
@@ -838,11 +848,9 @@ async function fetchStravaActivities(){
   if(!stravaToken) return;
   const headers={Authorization:`Bearer ${stravaToken}`};
   const out=[];
-  _listRequests=0;
   try{
     for(let page=1;;page++){
       syncStatus(`Loading activities… (${out.length})`);
-      _listRequests++;
       const r=await stravaFetch(`https://www.strava.com/api/v3/athlete/activities?per_page=100&page=${page}`,headers);
       if(r.rlBlocked) break;                    // budget exhausted — keep what we have
       if(r.status===401){
@@ -1089,7 +1097,7 @@ function habitTotals(week){
    ════════════════════════════════════════════════════════════ */
 function ensureWeek(iso,phase){
   if(!state.weeks[iso]){
-    state.weeks[iso]=normWeek({date:iso,phase:phase||"Base",collapsed:false},iso);
+    state.weeks[iso]=normWeek({date:iso,phase:phase||"Base"},iso);
   }
   return state.weeks[iso];
 }
