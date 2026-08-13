@@ -167,9 +167,8 @@ textarea::placeholder{color:#A4AEB7}
 .ptext:focus{outline:none;border-bottom-color:var(--line-strong)}
 .del{border:none;background:none;color:var(--ink-soft);cursor:pointer;opacity:0;font-size:16px;line-height:1;padding:2px 4px;flex:none}
 .pitem:hover .del{opacity:.6}.del:hover{opacity:1;color:var(--run)}
-.add-sess,.add-week{margin-top:6px;border:1px dashed var(--line-strong);background:none;color:var(--ink-soft);font-family:"JetBrains Mono",monospace;font-size:11px;border-radius:8px;padding:6px 10px;cursor:pointer}
-.add-sess:hover,.add-week:hover{border-color:var(--ink);color:var(--ink)}
-.add-week{margin-top:14px;padding:10px 16px}
+.add-sess{margin-top:6px;border:1px dashed var(--line-strong);background:none;color:var(--ink-soft);font-family:"JetBrains Mono",monospace;font-size:11px;border-radius:8px;padding:6px 10px;cursor:pointer}
+.add-sess:hover{border-color:var(--ink);color:var(--ink)}
 .strava-activities{display:flex;flex-direction:column;gap:6px}
 .act-card{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:10px;background:#F7F9FA;border:1px solid var(--line)}
 .act-disc{width:6px;min-height:36px;border-radius:3px;flex:none;margin-top:2px}
@@ -256,8 +255,6 @@ textarea::placeholder{color:#A4AEB7}
 
   <div class="banner" id="banner"></div>
   <div id="view"></div>
-  <div class="weeks" id="weeks"></div>
-  <div id="viewFoot"></div>
 </div>
 <div class="save-flash" id="flash">Saved ✓</div>
 
@@ -1090,11 +1087,32 @@ function habitTotals(week){
 /* ════════════════════════════════════════════════════════════
    WEEK HELPERS
    ════════════════════════════════════════════════════════════ */
-function ensureWeek(iso){
+function ensureWeek(iso,phase){
   if(!state.weeks[iso]){
-    state.weeks[iso]=normWeek({date:iso,phase:"Base",collapsed:false},iso);
+    state.weeks[iso]=normWeek({date:iso,phase:phase||"Base",collapsed:false},iso);
   }
   return state.weeks[iso];
+}
+/**
+ * Fill in every Monday from the last recorded week through the end of the
+ * current calendar year, so all remaining months exist and are navigable
+ * without any manual "add week" step. Runs once per load; idempotent.
+ */
+function ensureYearScaffold(){
+  const keys=sortedWeekKeys();
+  let d=dateFromISO(keys.length?keys[keys.length-1]:thisMondayISO());
+  if(!d) return 0;
+  // Always cover to year end, and never less than ~3 months ahead of today.
+  const yearEnd=new Date(new Date().getFullYear(),11,31);
+  const minHorizon=addDays(new Date(),91);
+  const horizon=yearEnd>minHorizon?yearEnd:minHorizon;
+  let created=0;
+  while(d<=horizon){
+    const iso=isoOf(d);
+    if(!state.weeks[iso]){ ensureWeek(iso,"Future"); created++; }
+    d=addDays(d,7);
+  }
+  return created;
 }
 /** Current + next week — crosses month AND year boundaries cleanly (fixes M4). */
 function currentAndNext(){
@@ -1150,28 +1168,28 @@ function renderHome(){
   document.getElementById("homeBtn").classList.add("active");
   document.getElementById("monBtn").classList.remove("active");
   const v=document.getElementById("view");
-  const foot=document.getElementById("viewFoot");
-  v.innerHTML=""; foot.innerHTML="";
+  v.innerHTML="";
 
   const [curISO,nextISO]=currentAndNext();
   const prevISO=isoOf(addDays(dateFromISO(curISO),-7));
   const curWeek=getWeek(curISO), prevWeek=getWeek(prevISO);
 
+  // Order: now → context → what to do → what just happened → history
   v.appendChild(el("div","sec-head","This week so far"));
   v.appendChild(buildTrendCards());
   v.appendChild(buildProgressPanel(curWeek,curISO));
+
+  v.appendChild(el("div","sec-head","Phases"));
+  v.appendChild(buildTimeline(timelineWeeks(),curISO));
+
+  v.appendChild(el("div","sec-head","This week & next"));
+  v.appendChild(buildWeekCards([curISO,nextISO]));
 
   v.appendChild(el("div","sec-head","Last week"));
   v.appendChild(buildDebriefPanel(prevWeek,prevISO));
 
   v.appendChild(el("div","sec-head","Recent weeks"));
   v.appendChild(buildRollingTable(6));
-
-  v.appendChild(el("div","sec-head","Phases"));
-  v.appendChild(buildTimeline(timelineWeeks(),curISO));
-
-  v.appendChild(el("div","sec-head","This week & next"));
-  renderWeekCards([curISO,nextISO]);
 }
 
 function buildTrendCards(){
@@ -1393,8 +1411,7 @@ function renderMonth(){
   document.getElementById("homeBtn").classList.remove("active");
   document.getElementById("monBtn").classList.add("active");
   const v=document.getElementById("view");
-  const foot=document.getElementById("viewFoot");
-  v.innerHTML=""; foot.innerHTML="";
+  v.innerHTML="";
 
   const mk=currentMonth||monthKeyOf(thisMondayISO());
   const weeks=weeksInMonth(mk);
@@ -1456,24 +1473,21 @@ function renderMonth(){
   v.appendChild(p);
 
   v.appendChild(el("div","sec-head","Weeks"));
-  renderWeekCards(weeks);
-
-  // add-week affordance
-  const add=el("button","add-week","+ Add a week to "+monthLabel(mk));
-  add.dataset.action="add-week"; add.dataset.month=mk;
-  foot.appendChild(add);
+  v.appendChild(buildWeekCards(weeks));
 }
 
 /* ── week cards ── */
-function renderWeekCards(isoList){
-  const c=document.getElementById("weeks");
-  c.innerHTML="";
+/** Returns the week-cards container so callers can place it anywhere in the page. */
+function buildWeekCards(isoList){
+  const c=el("div","weeks");
+  c.id="weeks";                       // isEditing() looks this up
   (isoList||[]).forEach(iso=>{
     // Rendering must not mutate state. A transient week object is rendered for a
     // date that has no record yet; it only becomes real when the user edits it.
     const w=getWeek(iso)||normWeek({date:iso},iso);
     c.appendChild(weekCard(w));
   });
+  return c;
 }
 function weekCard(w){
   // Weeks are never collapsible — always fully expanded, per the "no collapsible
@@ -1736,23 +1750,6 @@ document.addEventListener("click",e=>{
   if(!act) return;
   const a=act.dataset.action;
 
-  if(a==="add-week"){
-    const mk=act.dataset.month;
-    const [y,m]=mk.split("-").map(Number);
-    // Walk every Monday in the month and take the first that has no record.
-    // Stepping from the last existing week would refuse to fill an interior gap.
-    let d=mondayOf(new Date(y,m-1,1));
-    if(monthKeyOf(isoOf(d))!==mk) d=addDays(d,7);
-    let iso=null;
-    while(monthKeyOf(isoOf(d))===mk){
-      if(!state.weeks[isoOf(d)]){ iso=isoOf(d); break; }
-      d=addDays(d,7);
-    }
-    if(!iso){ flash("Every week in "+monthLabel(mk)+" already exists",true); return; }
-    ensureWeek(iso); schedule(); renderMonth();
-    return;
-  }
-
   const weekEl=act.closest("[data-week]");
   if(!weekEl) return;
   // Explicit user action on this week — materialise it if it was only a placeholder.
@@ -1933,6 +1930,10 @@ onAuthStateChanged(_auth,async user=>{
 
   await loadState();
   await loadCalCache();
+
+  // Scaffold the remaining months of the year so every month is navigable
+  // without a manual "add week" step.
+  if(_loadOk && ensureYearScaffold()>0) schedule();
 
   currentMonth=monthKeyOf(thisMondayISO());
   document.getElementById("monLabel").textContent=monthLabel(currentMonth);
