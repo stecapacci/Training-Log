@@ -1,7 +1,48 @@
 <!doctype html>
-<!-- v36 -->
+<!-- v37 -->
 <!--
   Training Log — Stefano
+  ─────────────────────────────────────────────────────────────
+  v37. Changes from v36:
+   · PROGRESS view — a third view for trends over 3/6/12 months or all time,
+     at weekly or monthly granularity.
+   · METRIC REGISTRY — one declarative table describes every metric (label,
+     group, source, rollup, direction, target, format). Adding a metric is one
+     row; nothing else changes. 60+ metrics across four sources.
+   · METRICS STORE — its own Firestore document (traininglog/metrics), so a bad
+     metrics import can never touch the plan, comments or habits. Imported
+     values and hand-entered values live in separate blocks and cannot
+     overwrite each other.
+   · Derived metrics are RECOMPUTED from activities, never stored, so a fixed
+     bug retroactively corrects history. Memoised per bucket.
+   · Data coverage table — every metric's source, span, day count, coverage
+     and rollup rule, so the page documents itself.
+   · Nav is three peer views. The month picker moved into the month view.
+   · Schema 36 -> 37 (settings.period, settings.gran). state3 shape unchanged.
+
+  v36 changes from v35:
+   · IMPORT: load a plan file (a bare weeks map or a full export payload) and
+     merge it in. Replaces `planned` only — comments and habits are never
+     touched, so importing the wrong file cannot cost you your notes.
+   · INTENSITY: average heart rate per activity is bucketed into easy /
+     moderate / hard and surfaced three ways — a trend card, a distribution
+     panel with an 80/20 reference, and a per-activity chip. Thresholds live
+     in settings and are editable from the header.
+   · Timeline section removed.
+   · Schema 35 -> 36. Additive only: settings.hrEasyMax / settings.hrHardMin.
+     The Firestore document is deliberately STILL traininglog/state3 — v36
+     reads every v35 document unchanged, so there is nothing to migrate and
+     no risk of orphaning data behind a new document name.
+
+  v35 structural changes, still in force:
+   · NO personal data in this file. Firestore is the sole source of truth.
+   · Weeks keyed by ISO Monday date. Quarters removed entirely.
+   · Months/years are derived views, never stored.
+   · Real Strava calories via cached per-activity detail fetch.
+   · Day-aligned week-over-week comparisons.
+   · Write-guards: never persists unless a load succeeded.
+   · Migrates traininglog/state2 -> traininglog/state3 once, non-destructively.
+  ─────────────────────────────────────────────────────────────
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -26,23 +67,9 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .hdr{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;flex-wrap:wrap}
 .eyebrow{font-family:"JetBrains Mono",monospace;text-transform:uppercase;letter-spacing:.22em;font-size:11px;color:var(--ink-soft)}
 .nav-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:2px}
-.this-wk-btn,.mon-btn{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:clamp(21px,3.6vw,32px);letter-spacing:-.02em;background:none;border:none;cursor:pointer;color:var(--ink);padding:0;line-height:1.1;white-space:nowrap}
-.this-wk-btn:hover,.mon-btn:hover{color:var(--swim)}
-.this-wk-btn.active,.mon-btn.active{color:var(--swim)}
-.mon-wrap{position:relative;display:inline-block}
-.mon-btn{display:flex;align-items:center;gap:8px}
-.mon-btn svg{flex:none;transition:transform .15s}
-.mon-btn.open svg{transform:rotate(180deg)}
-.mon-menu{position:absolute;top:calc(100% + 6px);left:0;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 32px -8px rgba(21,25,31,.22);min-width:230px;max-height:340px;overflow-y:auto;z-index:50;display:none}
-.mon-menu.show{display:block}
-.mon-yr{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-soft);padding:9px 16px 5px;background:#F1F4F6;position:sticky;top:0}
-.mon-opt{font-family:"JetBrains Mono",monospace;font-size:13px;padding:9px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
-.mon-opt:last-child{border-bottom:none}
-.mon-opt:hover{background:#F1F4F6}
-.mon-opt.active{font-weight:700}
-.mon-opt.active::after{content:"✓";margin-left:auto;color:var(--good)}
-.mon-opt small{margin-left:auto;color:var(--ink-soft);font-size:11px}
-.mon-opt.active small{margin-left:0}
+.this-wk-btn{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:clamp(19px,3.1vw,27px);letter-spacing:-.02em;background:none;border:none;cursor:pointer;color:var(--ink-soft);padding:0;line-height:1.1;white-space:nowrap}
+.this-wk-btn:hover{color:var(--swim)}
+.this-wk-btn.active{color:var(--ink)}
 .user-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
 .user-bar img{width:26px;height:26px;border-radius:50%;border:1px solid var(--line)}
 .user-bar span{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink-soft)}
@@ -54,8 +81,11 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .sync-status{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);margin-bottom:4px;min-height:14px;text-align:right}
 .sync-status.err{color:var(--run)}
 .sync-status.warn{color:var(--warn)}
-.export-btn{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);background:none;border:none;cursor:pointer;padding:0;text-align:right;display:none}
-.export-btn:hover{color:var(--ink);text-decoration:underline}
+.io-row{display:flex;gap:8px;margin-top:2px}
+.io-btn{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);background:none;
+  border:1px solid var(--line-strong);border-radius:8px;cursor:pointer;padding:4px 10px;white-space:nowrap;display:none}
+.io-btn:hover{color:var(--ink);border-color:var(--ink)}
+.io-btn[disabled]{opacity:.45;cursor:default}
 
 /* ── section headings ── */
 .sec-head{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.18em;color:var(--ink-soft);margin:22px 0 9px}
@@ -107,6 +137,41 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .missed{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--ink-soft);line-height:1.7}
 .missed .mx{color:var(--run)}
 
+/* ── progress view (v37) ── */
+.seg-ctl{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden}
+.seg-ctl button{font-family:"JetBrains Mono",monospace;font-size:11px;padding:5px 11px;border:none;
+  background:none;color:var(--ink-soft);cursor:pointer;border-right:1px solid var(--line)}
+.seg-ctl button:last-child{border-right:none}
+.seg-ctl button.on{background:var(--ink);color:#fff}
+.seg-ctl button:hover:not(.on){background:#F1F4F6;color:var(--ink)}
+.ctl-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.ctl-lbl{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;
+  letter-spacing:.14em;color:var(--ink-soft)}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:10px;margin-bottom:6px}
+.mcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+.mcard .mk-l{font-family:"JetBrains Mono",monospace;font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--ink-soft);display:flex;align-items:center;gap:5px}
+.mcard .mk-v{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:21px;line-height:1.1;margin-top:4px}
+.mcard .mk-d{font-family:"JetBrains Mono",monospace;font-size:10px;margin-top:2px}
+.mcard .mk-d.up{color:var(--good)}.mcard .mk-d.down{color:var(--bad)}.mcard .mk-d.neutral{color:var(--ink-soft)}
+.mcard svg{display:block;width:100%;height:34px;margin-top:7px;overflow:visible}
+.src-dot{width:6px;height:6px;border-radius:50%;flex:none}
+.cov-bar{height:5px;border-radius:999px;background:#EDF0F3;overflow:hidden;min-width:44px}
+.cov-fill{height:100%;border-radius:999px}
+.mtable{width:100%;border-collapse:collapse;font-family:"JetBrains Mono",monospace;font-size:11.5px}
+.mtable th{text-align:right;font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-soft);
+  padding:5px 7px;border-bottom:1px solid var(--line);font-weight:500;white-space:nowrap}
+.mtable th:first-child,.mtable th:nth-child(2){text-align:left}
+.mtable td{text-align:right;padding:5px 7px;border-bottom:1px solid var(--line);white-space:nowrap}
+.mtable td:first-child,.mtable td:nth-child(2){text-align:left}
+.mtable tr.dim td{color:var(--ink-soft)}
+.mtable input{font-family:"JetBrains Mono",monospace;font-size:11.5px;width:74px;text-align:right;
+  border:1px solid var(--line);border-radius:6px;padding:2px 5px;background:var(--card);color:var(--ink)}
+.mtable input:focus{outline:none;border-color:var(--swim)}
+.grp-head{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:13px;margin:18px 0 8px;
+  display:flex;align-items:center;gap:8px}
+.grp-head span{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--ink-soft);font-weight:400}
+
 /* ── intensity distribution (v36) ── */
 .int-bar{display:flex;height:26px;border-radius:8px;overflow:hidden;background:#EDF0F3;margin:4px 0 10px}
 .int-seg{display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:700;color:#fff;min-width:0;transition:width .3s;white-space:nowrap}
@@ -115,6 +180,7 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .int-hard{background:var(--bad)}
 .int-legend{display:flex;flex-wrap:wrap;gap:14px;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft)}
 .int-legend span.k{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:baseline}
+.int-note{font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--ink-soft);line-height:1.6;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
 .int-target{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);margin-top:2px}
 .zchip{display:inline-block;font-family:"JetBrains Mono",monospace;font-size:9px;font-weight:700;letter-spacing:.06em;padding:1px 5px;border-radius:999px;margin-left:5px;vertical-align:middle;color:#fff}
 .zchip.z-easy{background:var(--good)}
@@ -210,14 +276,9 @@ textarea::placeholder{color:#A4AEB7}
     <div>
       <div class="eyebrow">Training Log</div>
       <div class="nav-row">
-        <button class="this-wk-btn" id="homeBtn">This week</button>
-        <div class="mon-wrap">
-          <button class="mon-btn" id="monBtn">
-            <span id="monLabel">Month</span>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <div class="mon-menu" id="monMenu"></div>
-        </div>
+        <button class="this-wk-btn" id="homeBtn">Week</button>
+        <button class="this-wk-btn" id="monBtn">Month</button>
+        <button class="this-wk-btn" id="progBtn">Progress</button>
       </div>
     </div>
     <div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px">
@@ -233,9 +294,11 @@ textarea::placeholder{color:#A4AEB7}
         <button class="signout-btn" id="signOutBtn">Sign out</button>
       </div>
       <div class="sync-status" id="syncStatus">Connecting…</div>
-      <button class="export-btn" id="exportBtn">↓ Export JSON</button>
-      <button class="export-btn" id="importBtn">↑ Import plan</button>
-      <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+      <div class="io-row">
+        <button class="io-btn" id="importBtn">↑ Import</button>
+        <button class="io-btn" id="exportBtn">↓ Export</button>
+      </div>
+      <input type="file" id="importFile" accept=".json,.zip,application/json,application/zip" style="display:none">
     </div>
   </div>
 
@@ -258,13 +321,15 @@ const _app=initializeApp(FB), _db=getFirestore(_app), _auth=getAuth(_app);
 const DOC_STATE   = doc(_db,"traininglog","state3");     // v35 + v36 (same shape)
 const DOC_LEGACY  = doc(_db,"traininglog","state2");     // v34 — read once, never written
 const DOC_ACTCACHE= doc(_db,"traininglog","actcache");   // per-activity calorie cache
+const DOC_METRICS = doc(_db,"traininglog","metrics");    // v37 wellness metrics, own doc
 const DOC_STRAVA  = doc(_db,"secrets","strava");
 
 const STRAVA_CLIENT_ID="257298";
 const STRAVA_REDIRECT=location.origin+location.pathname;
-const SCHEMA_VERSION=36;
+const SCHEMA_VERSION=37;
 const LS_STATE="tri_v35";
 const LS_BACKUP="tri_v35_backups";
+const LS_METRICS="tri_v37_metrics";
 
 /* Strava rate limits (non-upload, per application):
      100 requests / 15 minutes — window resets at :00, :15, :30, :45
@@ -327,6 +392,172 @@ const HR_HARD_MIN_DEFAULT=161;
 const EASY_TARGET_PCT=80;          // the 80/20 reference line
 const TRAIL_WEEKS=6;               // trailing window for rate + intensity metrics
 
+/* ════════════════════════════════════════════════════════════
+   METRIC REGISTRY (v37)
+   The ONLY place that knows metric names. Adding a metric is one row here.
+   Nothing in the store, the import, the rollup or the views needs changing.
+
+   src      'garmin'  imported daily values, read from the metrics store
+            'manual'  hand-entered, same store, separate block, editable
+            'derived' recomputed from activities every time — never stored, so
+                      a fixed bug retroactively corrects the whole history
+            'weeks'   already in state.weeks (habits), read via existing helpers
+   agg      how DAYS roll up into a week or month: mean | last | sum | max | min
+   better   'up' | 'down' | null — colours the delta, nothing else
+   from     derived only: 'totals' picks off computeTotals, 'acts' gets the array
+   ════════════════════════════════════════════════════════════ */
+const MGROUPS=[
+  ["physiology","Physiology"],["recovery","Recovery"],["load","Training load"],
+  ["body","Body"],["execution","Execution"],["performance","Performance"],
+  ["volume","Volume"],["peaks","Peak sessions"],["fuel","Fuelling"],
+  ["habits","Habits"],["plan","Plan"],["predictions","Race predictions"]
+];
+const asIs=v=>Math.round(v), one=v=>v.toFixed(1), two=v=>v.toFixed(2);
+/* Sign is pulled out first. Deltas are routinely negative and Math.floor on a
+   negative quotient plus a negative remainder produced "-2:-30" for -90s. */
+const mmss=v=>{const n=Math.round(Math.abs(v)),sg=v<0?"-":"";
+  return sg+Math.floor(n/60)+":"+String(n%60).padStart(2,"0");};
+const hhmmss=v=>{const n=Math.round(Math.abs(v)),sg=v<0?"-":"";
+  return sg+Math.floor(n/3600)+":"+String(Math.floor(n%3600/60)).padStart(2,"0")+
+    ":"+String(n%60).padStart(2,"0");};
+
+const METRICS={
+  /* ── physiology ── */
+  vo2max:{label:"VO2max",group:"physiology",src:"garmin",agg:"last",better:"up",fmt:asIs,pin:1},
+  vo2maxBike:{label:"VO2max cycling",group:"physiology",src:"garmin",agg:"last",better:"up",fmt:asIs},
+  rhr:{label:"Resting HR",group:"physiology",src:"garmin",agg:"mean",better:"down",unit:"bpm",fmt:asIs,pin:1},
+  hrv:{label:"HRV",group:"physiology",src:"garmin",agg:"mean",better:"up",fmt:asIs,pin:1},
+  hrvWeekly:{label:"HRV 7-day",group:"physiology",src:"garmin",agg:"last",better:"up",fmt:asIs},
+  respiration:{label:"Respiration",group:"physiology",src:"garmin",agg:"mean",better:"down",unit:"br/min",fmt:one},
+  skinTempDelta:{label:"Skin temp \u0394",group:"physiology",src:"garmin",agg:"mean",better:null,unit:"\u00b0C",fmt:two},
+  /* ── recovery ── */
+  sleepH:{label:"Sleep",group:"recovery",src:"garmin",agg:"mean",better:"up",unit:"h",target:7.5,fmt:one,pin:1},
+  sleepScore:{label:"Sleep score",group:"recovery",src:"garmin",agg:"mean",better:"up",fmt:asIs},
+  sleepDeepMin:{label:"Deep sleep",group:"recovery",src:"garmin",agg:"mean",better:"up",unit:"min",fmt:asIs},
+  sleepRemMin:{label:"REM sleep",group:"recovery",src:"garmin",agg:"mean",better:"up",unit:"min",fmt:asIs},
+  sleepStress:{label:"Sleep stress",group:"recovery",src:"garmin",agg:"mean",better:"down",fmt:one},
+  readiness:{label:"Readiness",group:"recovery",src:"garmin",agg:"mean",better:"up",fmt:asIs},
+  stressAvg:{label:"Daily stress",group:"recovery",src:"garmin",agg:"mean",better:"down",fmt:asIs},
+  bbCharged:{label:"Body battery charged",group:"recovery",src:"garmin",agg:"mean",better:"up",fmt:asIs},
+  bbDrained:{label:"Body battery drained",group:"recovery",src:"garmin",agg:"mean",better:"down",fmt:asIs},
+  /* ── training load ── */
+  ctl:{label:"Chronic load",group:"load",src:"garmin",agg:"last",better:"up",fmt:asIs,pin:1},
+  atl:{label:"Acute load",group:"load",src:"garmin",agg:"last",better:null,fmt:asIs},
+  acwr:{label:"Acute:chronic",group:"load",src:"garmin",agg:"last",better:null,fmt:two},
+  /* ── body ── */
+  weightKg:{label:"Weight",group:"body",src:"garmin",agg:"mean",better:"down",unit:"kg",fmt:one,pin:1},
+  bmi:{label:"BMI",group:"body",src:"garmin",agg:"mean",better:"down",fmt:one},
+  bioAge:{label:"Fitness age",group:"body",src:"garmin",agg:"last",better:"down",fmt:one},
+  bodyFatPct:{label:"Body fat",group:"body",src:"manual",agg:"last",better:"down",unit:"%",fmt:one},
+  /* ── race predictions ── */
+  pred5kSec:{label:"5k prediction",group:"predictions",src:"garmin",agg:"last",better:"down",fmt:mmss},
+  pred10kSec:{label:"10k prediction",group:"predictions",src:"garmin",agg:"last",better:"down",fmt:mmss},
+  predHMSec:{label:"Half prediction",group:"predictions",src:"garmin",agg:"last",better:"down",fmt:hhmmss},
+  predMSec:{label:"Marathon prediction",group:"predictions",src:"garmin",agg:"last",better:"down",fmt:hhmmss},
+  /* ── fuelling ── */
+  sweatRateMlH:{label:"Sweat rate",group:"fuel",src:"garmin",agg:"mean",better:null,unit:"ml/h",fmt:asIs},
+  sweatLossMl:{label:"Sweat loss",group:"fuel",src:"garmin",agg:"sum",better:null,unit:"ml",fmt:asIs},
+  activeKcal:{label:"Active energy",group:"fuel",src:"garmin",agg:"sum",better:null,unit:"kcal",fmt:asIs},
+  totalKcal:{label:"Total energy",group:"fuel",src:"garmin",agg:"sum",better:null,unit:"kcal",fmt:asIs},
+  steps:{label:"Steps",group:"fuel",src:"garmin",agg:"sum",better:null,fmt:asIs},
+  vigorousMin:{label:"Vigorous minutes",group:"fuel",src:"garmin",agg:"sum",better:"up",fmt:asIs},
+  moderateMin:{label:"Moderate minutes",group:"fuel",src:"garmin",agg:"sum",better:"up",fmt:asIs},
+  /* ── manual tests ── */
+  ftp:{label:"FTP",group:"performance",src:"manual",agg:"last",better:"up",unit:"W",fmt:asIs},
+  cssSecPer100m:{label:"Swim CSS",group:"performance",src:"manual",agg:"last",better:"down",unit:"/100m",fmt:mmss},
+  lthr:{label:"Threshold HR",group:"performance",src:"manual",agg:"last",better:null,unit:"bpm",fmt:asIs},
+  hrMax:{label:"Max HR",group:"performance",src:"manual",agg:"last",better:null,unit:"bpm",fmt:asIs},
+  /* ── volume, derived ── */
+  hours:{label:"Hours",group:"volume",src:"derived",from:"totals",pick:t=>t.hrs||null,better:null,unit:"h",fmt:one,pin:1},
+  sessions:{label:"Sessions",group:"volume",src:"derived",from:"totals",pick:t=>t.count||null,better:null,fmt:asIs},
+  bikeKm:{label:"Bike",group:"volume",src:"derived",from:"totals",pick:t=>t.bikeKm||null,better:null,unit:"km",fmt:asIs},
+  runKm:{label:"Run",group:"volume",src:"derived",from:"totals",pick:t=>t.runKm||null,better:null,unit:"km",fmt:one},
+  swimM:{label:"Swim",group:"volume",src:"derived",from:"totals",pick:t=>t.swimM||null,better:null,unit:"m",fmt:asIs},
+  bikeElevM:{label:"Bike climbing",group:"volume",src:"derived",from:"totals",pick:t=>t.bikeElevM||null,better:null,unit:"m",fmt:asIs},
+  kcalStrava:{label:"Session energy",group:"volume",src:"derived",from:"totals",pick:t=>t.kcal||null,better:null,unit:"kcal",fmt:asIs},
+  /* ── execution, derived ── */
+  easyPct:{label:"Easy share",group:"execution",src:"derived",from:"totals",pick:t=>t.easyPct,
+           better:"up",unit:"%",target:80,fmt:asIs,pin:1},
+  modPct:{label:"Moderate share",group:"execution",src:"derived",from:"totals",pick:t=>t.modPct,better:"down",unit:"%",fmt:asIs},
+  hardPct:{label:"Hard share",group:"execution",src:"derived",from:"totals",pick:t=>t.hardPct,better:null,unit:"%",fmt:asIs},
+  avgHr:{label:"Average HR",group:"execution",src:"derived",from:"totals",pick:t=>t.avgHr||null,better:null,unit:"bpm",fmt:asIs},
+  hrCoveragePct:{label:"HR coverage",group:"execution",src:"derived",from:"totals",pick:t=>t.hrCoveragePct,better:"up",unit:"%",fmt:asIs},
+  runEasyPct:{label:"Run easy share",group:"execution",src:"derived",from:"acts",
+              compute:a=>computeTotals(a.filter(x=>RUN_TYPES.has(sportOf(x)))).easyPct,better:"up",unit:"%",target:80,fmt:asIs},
+  bikeEasyPct:{label:"Bike easy share",group:"execution",src:"derived",from:"acts",
+              compute:a=>computeTotals(a.filter(x=>BIKE_TYPES.has(sportOf(x)))).easyPct,better:"up",unit:"%",target:80,fmt:asIs},
+  /* ── performance at effort, derived. Speed per heartbeat is the cleanest
+       "am I actually fitter" signal available without a lab. ── */
+  runEF:{label:"Run efficiency",group:"performance",src:"derived",from:"acts",
+         compute:a=>effRatio(a,RUN_TYPES,100),better:"up",fmt:two},
+  bikeEF:{label:"Bike efficiency",group:"performance",src:"derived",from:"acts",
+          compute:a=>wattsPerBeat(a),better:"up",fmt:two},
+  runPaceSec:{label:"Run pace",group:"performance",src:"derived",from:"totals",
+              pick:t=>t.runM>0?t.runSec/(t.runM/1000):null,better:"down",unit:"/km",fmt:mmss},
+  swimPaceSec:{label:"Swim pace",group:"performance",src:"derived",from:"totals",
+              pick:t=>t.swimM>0?t.swimSec/(t.swimM/100):null,better:"down",unit:"/100m",fmt:mmss},
+  bikeSpeedKph:{label:"Bike speed",group:"performance",src:"derived",from:"acts",
+              compute:a=>avgSpeedKph(a,BIKE_TYPES),better:"up",unit:"kph",fmt:one},
+  bikeAvgW:{label:"Bike power",group:"performance",src:"derived",from:"totals",pick:t=>t.avgPower||null,
+            better:"up",unit:"W",fmt:asIs},
+  /* ── peak sessions, derived ── */
+  longestRunKm:{label:"Longest run",group:"peaks",src:"derived",from:"acts",
+                compute:a=>maxDist(a,RUN_TYPES)/1000||null,better:"up",unit:"km",fmt:one},
+  longestRideKm:{label:"Longest ride",group:"peaks",src:"derived",from:"acts",
+                compute:a=>maxDist(a,BIKE_TYPES)/1000||null,better:"up",unit:"km",fmt:asIs},
+  longestSwimM:{label:"Longest swim",group:"peaks",src:"derived",from:"acts",
+                compute:a=>maxDist(a,SWIM_TYPES)||null,better:"up",unit:"m",fmt:asIs},
+  /* ── habits, read from the weeks you already keep ── */
+  cigs:{label:"Cigarettes",group:"habits",src:"weeks",agg:"sum",better:"down",fmt:asIs,
+        read:w=>{const h=habitTotals(w);return h.anyRecorded?h.cigs:null;}},
+  drinks:{label:"Drinks",group:"habits",src:"weeks",agg:"sum",better:"down",fmt:asIs,
+        read:w=>{const h=habitTotals(w);return h.anyRecorded?h.drinks:null;}},
+  cigFreeDays:{label:"Cigarette-free days",group:"habits",src:"weeks",agg:"sum",better:"up",fmt:asIs,
+        read:w=>{if(!w||!w.habits) return null;let n=0,any=0;
+                 DAYS.forEach(d=>{const v=w.habits[d]&&w.habits[d].cigs;if(v!=null){any=1;if(v===0)n++;}});
+                 return any?n:null;}},
+  /* ── plan adherence, read from the weeks ── */
+  adherencePct:{label:"Adherence",group:"plan",src:"weeks",agg:"mean",better:"up",unit:"%",fmt:asIs,
+        read:w=>{const a=adherence(w);return a.total?a.pct:null;}},
+  plannedSessions:{label:"Planned",group:"plan",src:"weeks",agg:"sum",better:null,fmt:asIs,
+        read:w=>{const a=adherence(w);return a.total||null;}},
+  doneSessions:{label:"Completed",group:"plan",src:"weeks",agg:"sum",better:"up",fmt:asIs,
+        read:w=>{const a=adherence(w);return a.total?a.done:null;}}
+};
+const METRIC_KEYS=Object.keys(METRICS);
+
+/* Small helpers the derived metrics lean on. Each returns null rather than 0
+   when there is nothing to measure, so an empty bucket breaks the line instead
+   of plotting a false zero. */
+function effRatio(acts,types,scale){
+  let d=0,t=0,hb=0;
+  acts.forEach(a=>{ if(!types.has(sportOf(a))) return;
+    const hr=a.average_heartrate, secs=durationSecs(a);
+    if(!(hr>0)||!(secs>0)||!(a.distance>0)) return;
+    d+=a.distance; t+=secs; hb+=hr*secs; });
+  if(!t||!hb) return null;
+  return (d/t)/(hb/t)*scale;
+}
+function wattsPerBeat(acts){
+  let w=0,hr=0,n=0;
+  acts.forEach(a=>{ const st=sportOf(a);
+    if(!BIKE_TYPES.has(st)||st==="EBikeRide") return;
+    if(!(a.average_watts>0)||!(a.average_heartrate>0)) return;
+    w+=a.average_watts; hr+=a.average_heartrate; n++; });
+  return n?(w/n)/(hr/n):null;
+}
+function avgSpeedKph(acts,types){
+  let d=0,t=0;
+  acts.forEach(a=>{ if(!types.has(sportOf(a))) return;
+    const secs=durationSecs(a); if(!(secs>0)||!(a.distance>0)) return;
+    d+=a.distance; t+=secs; });
+  return t?(d/t)*3.6:null;
+}
+function maxDist(acts,types){
+  let m=0; acts.forEach(a=>{ if(types.has(sportOf(a))&&a.distance>m) m=a.distance; });
+  return m;
+}
+
 const BIKE_TYPES=new Set(["Ride","VirtualRide","EBikeRide","GravelRide","MountainBikeRide"]);
 const RUN_TYPES =new Set(["Run","TrailRun","VirtualRun"]);
 const SWIM_TYPES=new Set(["Swim"]);
@@ -342,18 +573,55 @@ let saveTimer=null;
 let _authed=false;
 let _loadOk=false;               // WRITE GUARD — never persist unless a load succeeded
 let _cacheDirty=false;
-let viewMode="home";             // "home" | "month"
+let viewMode="home";             // "home" | "month" | "progress"
 let currentMonth=null;           // "YYYY-MM"
 let _backfillRunning=false;
 let _rateLimited=false;          // Strava budget exhausted or 429 seen
 let _rlTimer=null;               // auto-resume at the next 15-minute boundary
 let _pendingRender=false;        // a re-render deferred because the user is typing
 let _roWarned=false;             // read-only warning already shown
+let metrics=blankMetrics();      // v37 wellness store — its OWN Firestore doc
+let _metricsLoadOk=false;        // separate write guard from state
+let _derivedMemo=new Map();      // bucket -> derived values, cleared when activities change
 
+/* The metrics store is deliberately a separate document, so that a malformed
+   metrics file cannot reach the plan, the comments or the habits. The two
+   documents have independent write guards. `days` is imported, `manual` is typed by hand, and
+   neither block can overwrite the other — on read, manual wins. */
+function blankMetrics(){ return {version:1,savedAt:null,days:{},sources:{},manual:{}}; }
+function normMetrics(raw){
+  const m=blankMetrics();
+  if(!raw||typeof raw!=="object") return m;
+  const copyDays=(src,dst)=>{
+    if(!src||typeof src!=="object") return;
+    Object.keys(src).forEach(d=>{
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+      const row=src[d]; if(!row||typeof row!=="object") return;
+      const out={};
+      Object.keys(row).forEach(k=>{
+        // Unknown keys are dropped, so a stale file cannot smuggle in fields the
+        // registry has no idea how to aggregate or render.
+        if(!Object.prototype.hasOwnProperty.call(METRICS,k)) return;
+        const v=num(row[k]); if(v!==null) out[k]=v;
+      });
+      if(Object.keys(out).length) dst[d]=out;
+    });
+  };
+  copyDays(raw.days,m.days);
+  copyDays(raw.manual,m.manual);
+  if(raw.sources&&typeof raw.sources==="object"){
+    Object.keys(raw.sources).forEach(k=>{
+      if(Object.prototype.hasOwnProperty.call(METRICS,k)) m.sources[k]=raw.sources[k];
+    });
+  }
+  m.savedAt=typeof raw.savedAt==="string"?raw.savedAt:null;
+  return m;
+}
 function blankState(){
   return {
     version:SCHEMA_VERSION, savedAt:null,
-    settings:{ weightKg:75, hrEasyMax:HR_EASY_MAX_DEFAULT, hrHardMin:HR_HARD_MIN_DEFAULT },
+    settings:{ weightKg:75, hrEasyMax:HR_EASY_MAX_DEFAULT, hrHardMin:HR_HARD_MIN_DEFAULT,
+               period:"12m", gran:"month" },
     weeks:{}
   };
 }
@@ -485,6 +753,13 @@ function discColor(sport){return `var(--${discOf(sport)})`;}
 const ZERO_WORDS=new Set(["none","nada","no","nope","zero","niente","-","—","nothing","tempted but no"]);
 
 /** Free-text habit value -> integer or null. null = not recorded, 0 = recorded zero. */
+/* Numeric coercion used by the metrics store and the totals engine. Returns
+   null rather than NaN so a bad value can never poison an average. */
+function num(v){
+  if(v===null||v===undefined||typeof v==="boolean") return null;
+  const n=Number(v);
+  return Number.isFinite(n)?n:null;
+}
 function parseHabit(v){
   if(v===null||v===undefined) return null;
   if(typeof v==="number") return isFinite(v)?Math.round(v):null;
@@ -552,6 +827,9 @@ function normState(raw){
     s.settings.hrHardMin = (isFinite(h)&&h>s.settings.hrEasyMax&&h<=230)
       ? Math.round(h)
       : Math.max(s.settings.hrEasyMax+1,HR_HARD_MIN_DEFAULT);
+    s.settings.period = PERIODS[raw.settings.period]?raw.settings.period:"12m";
+    s.settings.gran   = (raw.settings.gran==="week"||raw.settings.gran==="month")
+      ? raw.settings.gran : "month";
   }
   s.savedAt = typeof raw.savedAt==="string" ? raw.savedAt : null;
   const src=(raw.weeks&&typeof raw.weeks==="object")?raw.weeks:{};
@@ -709,6 +987,40 @@ async function loadState(){
     }
   }
 }
+
+/* ════════════════════════════════════════════════════════════
+   METRICS STORE — own document, own guard
+   ════════════════════════════════════════════════════════════ */
+async function loadMetrics(){
+  try{
+    const snap=await getDoc(DOC_METRICS);
+    metrics = (snap.exists()&&snap.data()&&snap.data().payload)
+      ? normMetrics(snap.data().payload) : blankMetrics();
+    _metricsLoadOk=true;
+    try{ localStorage.setItem(LS_METRICS,JSON.stringify(metrics)); }catch(_){}
+  }catch(e){
+    console.error("metrics load failed:",e);
+    _metricsLoadOk=false;                       // never write after a failed read
+    try{
+      const raw=localStorage.getItem(LS_METRICS);
+      metrics = raw ? normMetrics(JSON.parse(raw)) : blankMetrics();
+    }catch(_){ metrics=blankMetrics(); }
+  }
+}
+async function persistMetrics(){
+  if(!_metricsLoadOk){ flash("Metrics are read-only this session",true); return false; }
+  metrics.savedAt=new Date().toISOString();
+  try{
+    await setDoc(DOC_METRICS,{payload:metrics},{merge:false});
+    try{ localStorage.setItem(LS_METRICS,JSON.stringify(metrics)); }catch(_){}
+    return true;
+  }catch(e){
+    console.error("metrics save failed:",e);
+    try{ localStorage.setItem(LS_METRICS,JSON.stringify(metrics)); }catch(_){}
+    return false;
+  }
+}
+function metricsDayCount(){ return new Set(Object.keys(metrics.days).concat(Object.keys(metrics.manual))).size; }
 
 async function persist(silent){
   if(!_loadOk){                                  // ← the guard that fixes C2
@@ -923,6 +1235,7 @@ async function fetchStravaActivities(){
       if(batch.length<100) break;               // short page = last page
     }
     allActivities=out;
+    invalidateDerived();          // derived metrics are recomputed, not stored
     showConnect(false);
     updateExportBtn();
     refreshStatus();
@@ -1008,6 +1321,160 @@ function activityCalories(a){
 /* ════════════════════════════════════════════════════════════
    STATS ENGINE  — one implementation, used everywhere (fixes v34 duplication)
    ════════════════════════════════════════════════════════════ */
+const PERIODS={"3m":{label:"3 months",months:3},"6m":{label:"6 months",months:6},
+               "12m":{label:"12 months",months:12},"all":{label:"All time",months:null}};
+
+/* ════════════════════════════════════════════════════════════
+   BUCKETS + ROLLUP (v37)
+   A bucket is a week or a month: a label, a half-open [start,end) window, and
+   the ISO day keys inside it. Every metric rolls up the same way regardless of
+   where its numbers come from, which is what makes the registry worth having.
+   ════════════════════════════════════════════════════════════ */
+function earliestDataDate(){
+  const c=[];
+  if(allActivities.length) c.push(actDate(allActivities.reduce((m,a)=>actDate(a)<actDate(m)?a:m)));
+  const dk=Object.keys(metrics.days).concat(Object.keys(metrics.manual)).sort();
+  if(dk.length) c.push(dateFromISO(dk[0]));
+  const wk=sortedWeekKeys();
+  if(wk.length) c.push(dateFromISO(wk[0]));
+  const valid=c.filter(Boolean);
+  if(!valid.length) return mondayOf(new Date());
+  return valid.reduce((m,d)=>d<m?d:m);
+}
+function buildBuckets(period,gran){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const spec=PERIODS[period]||PERIODS["12m"];
+  let from;
+  if(spec.months===null) from=earliestDataDate();
+  else { from=new Date(today); from.setMonth(from.getMonth()-spec.months); }
+  const out=[];
+  if(gran==="week"){
+    let d=mondayOf(from);
+    const last=mondayOf(today);
+    // Cap the count so "all time" at weekly granularity can never render
+    // thousands of columns if a stray far-past date sneaks into the data.
+    let guard=0;
+    while(d<=last&&guard++<520){
+      const end=addDays(d,7);
+      out.push({key:isoOf(d),label:weekLabel(isoOf(d)),start:new Date(d),end,
+                days:isoRange(d,end),weekISOs:[isoOf(d)],gran:"week"});
+      d=end;
+    }
+  }else{
+    let y=from.getFullYear(), mo=from.getMonth();
+    let guard=0;
+    while(guard++<240){
+      const mk=y+"-"+pad2(mo+1);
+      const cStart=new Date(y,mo,1), cEnd=new Date(y,mo+1,1);
+      if(cStart>today) break;
+      // A month is the union of the WEEKS whose Monday falls in it — the same
+      // rule totalsForMonth uses. A calendar window would both double-count a
+      // straddling week across two months AND disagree with the month view's
+      // own totals for the same month. Falls back to the calendar month only
+      // where no weeks exist yet, so the axis stays continuous.
+      const wks=weeksInMonth(mk);
+      let days,start,end;
+      if(wks.length){
+        days=[]; wks.forEach(w=>{const d0=dateFromISO(w); if(d0) days=days.concat(isoRange(d0,addDays(d0,7)));});
+        start=dateFromISO(days[0]); end=addDays(dateFromISO(days[days.length-1]),1);
+      }else{
+        days=isoRange(cStart,cEnd); start=cStart; end=cEnd;
+      }
+      out.push({key:mk,label:MONTH_NAMES[mo].slice(0,3)+" "+String(y).slice(2),
+                start,end,days,weekISOs:wks,gran:"month"});
+      mo++; if(mo>11){mo=0;y++;}
+    }
+  }
+  return out;
+}
+function isoRange(start,end){
+  const out=[]; let d=new Date(start);
+  while(d<end){ out.push(isoOf(d)); d=addDays(d,1); }
+  return out;
+}
+/** Roll a set of daily numbers up by the registry's agg rule. */
+function aggregate(vals,how){
+  if(!vals.length) return null;
+  switch(how){
+    case "last": return vals[vals.length-1];
+    case "first":return vals[0];
+    case "sum":  return vals.reduce((a,b)=>a+b,0);
+    case "max":  return Math.max.apply(null,vals);
+    case "min":  return Math.min.apply(null,vals);
+    default:     return vals.reduce((a,b)=>a+b,0)/vals.length;
+  }
+}
+/** Daily values for a stored metric across a bucket. manual overrides imported. */
+function storedVals(key,bucket){
+  const out=[];
+  bucket.days.forEach(d=>{
+    const man=metrics.manual[d]&&metrics.manual[d][key];
+    const imp=metrics.days[d]&&metrics.days[d][key];
+    const v=(man!==undefined&&man!==null)?man:imp;
+    if(v!==undefined&&v!==null) out.push(v);
+  });
+  return out;
+}
+/**
+ * Derived metrics are recomputed from activities every time — never stored — so
+ * fixing a bug retroactively corrects the whole history. Memoised per bucket
+ * because a bucket's totals feed a dozen metrics and there is no reason to walk
+ * the activity list once per metric.
+ */
+function derivedFor(bucket){
+  const memoKey=bucket.gran+"|"+bucket.key;
+  if(_derivedMemo.has(memoKey)) return _derivedMemo.get(memoKey);
+  // Select by the bucket's day set rather than a [start,end) window, so a
+  // week-based month picks up exactly the days it claims and nothing else.
+  const dset=new Set(bucket.days);
+  const acts=allActivities.filter(a=>dset.has(isoOf(actDate(a))));
+  const totals=computeTotals(acts);
+  const row={};
+  METRIC_KEYS.forEach(k=>{
+    const m=METRICS[k];
+    if(m.src!=="derived") return;
+    let v=null;
+    try{ v = m.from==="acts" ? m.compute(acts) : m.pick(totals); }
+    catch(_){ v=null; }
+    row[k]=(typeof v==="number"&&isFinite(v))?v:null;
+  });
+  _derivedMemo.set(memoKey,row);
+  return row;
+}
+/** Weeks-sourced metrics: read each week in the bucket, then aggregate. */
+function weeksVals(key,bucket){
+  const m=METRICS[key], out=[];
+  (bucket.weekISOs||[]).forEach(iso=>{
+    const w=getWeek(iso); if(!w) return;
+    let v=null; try{ v=m.read(w); }catch(_){ v=null; }
+    if(typeof v==="number"&&isFinite(v)) out.push(v);
+  });
+  return out;
+}
+/** THE accessor. Every view asks for a metric this way and nothing else. */
+function metricValue(key,bucket){
+  const m=METRICS[key]; if(!m) return null;
+  if(m.src==="derived"){ const v=derivedFor(bucket)[key]; return v==null?null:v; }
+  if(m.src==="weeks")  return aggregate(weeksVals(key,bucket),m.agg);
+  return aggregate(storedVals(key,bucket),m.agg);
+}
+function metricSeries(key,buckets){ return buckets.map(b=>metricValue(key,b)); }
+function hasAnyData(key,buckets){ return metricSeries(key,buckets).some(v=>v!=null); }
+function fmtMetric(key,v){
+  if(v==null) return "\u2014";
+  const m=METRICS[key];
+  const t=(m.fmt?m.fmt(v):String(v));
+  return m.unit?t+(m.unit.charAt(0)==="/"?m.unit:" "+m.unit):t;
+}
+/** Colour a change according to the metric's own direction, not the sign. */
+function deltaClass(key,first,last){
+  const m=METRICS[key];
+  if(!m.better||first==null||last==null||first===0) return "neutral";
+  const d=last-first;
+  if(Math.abs(d)/Math.abs(first)<0.02) return "neutral";
+  return (d>0)===(m.better==="up")?"up":"down";
+}
+
 function actsBetween(start,end){
   return allActivities.filter(a=>{const d=actDate(a);return d>=start&&d<end;});
 }
@@ -1030,6 +1497,8 @@ function sharesTo100(parts,total){
   for(let k=0;k<order.length&&left>0;k++,left--) out[order[k].i]++;
   return out;
 }
+/* Any change to the activity list invalidates every derived number. */
+function invalidateDerived(){ _derivedMemo.clear(); }
 function computeTotals(acts){
   const t={
     count:acts.length, secs:0, kcal:0, kcalEstimated:0,
@@ -1037,7 +1506,7 @@ function computeTotals(acts){
     runSec:0, swimSec:0,
     bikeWattSum:0, bikeWattN:0, hrWSum:0, hrN:0,
     // v36 intensity: seconds bucketed by the session's average HR
-    easySec:0, modSec:0, hardSec:0
+    easySec:0, modSec:0, hardSec:0, bikeElevM:0
   };
   const eMax=hrEasyMax(), hMin=hrHardMin();
   acts.forEach(a=>{
@@ -1052,6 +1521,7 @@ function computeTotals(acts){
 
     if(BIKE_TYPES.has(st)){
       t.bikeM+=dist;
+      t.bikeElevM+=num(a.total_elevation_gain)||0;
       if(a.average_watts>0&&st!=="EBikeRide"){ t.bikeWattSum+=a.average_watts; t.bikeWattN++; }
     }
     if(RUN_TYPES.has(st)){ t.runM+=dist; t.runSec+=secs; }
@@ -1251,8 +1721,9 @@ function weeksInMonth(mk){
    RENDER — router
    ════════════════════════════════════════════════════════════ */
 function render(){
-  if(viewMode==="home") renderHome();
-  else renderMonth();
+  if(viewMode==="progress") renderProgress();
+  else if(viewMode==="month") renderMonth();
+  else renderHome();
 }
 /** True while the caret is inside a week card. */
 function isEditing(){
@@ -1273,11 +1744,320 @@ document.addEventListener("focusout",()=>{
   setTimeout(()=>{ if(_pendingRender&&!isEditing()){ _pendingRender=false; render(); } },200);
 });
 
+function setNav(activeId){
+  ["homeBtn","monBtn","progBtn"].forEach(id=>{
+    const b=document.getElementById(id); if(b) b.classList.toggle("active",id===activeId);
+  });
+}
+function buildMonthPicker(mk){
+  const row=el("div","ctl-row");
+  const months=monthsWithData();
+  const i=months.indexOf(mk);
+  const nav=(txt,target,dis)=>{
+    const b=el("button",null,txt);
+    b.style.cssText="font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 10px;"+
+      "border:1px solid var(--line-strong);border-radius:8px;background:none;cursor:pointer;"+
+      "color:var(--ink-soft)";
+    if(dis){ b.disabled=true; b.style.opacity=".4"; b.style.cursor="default"; }
+    else b.addEventListener("click",()=>goMonth(target));
+    return b;
+  };
+  row.appendChild(nav("\u2190 Prev",months[i-1],i<=0));
+  const sel=el("select");
+  sel.style.cssText="font-family:'JetBrains Mono',monospace;font-size:12px;padding:5px 8px;"+
+    "border:1px solid var(--line-strong);border-radius:8px;background:var(--card);color:var(--ink)";
+  months.forEach(m=>{
+    const o=el("option",null,monthLabel(m));
+    o.value=m; if(m===mk) o.selected=true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener("change",()=>goMonth(sel.value));
+  row.appendChild(sel);
+  row.appendChild(nav("Next \u2192",months[i+1],i<0||i>=months.length-1));
+  return row;
+}
+
+/* ════════════════════════════════════════════════════════════
+   PROGRESS VIEW (v37)
+   ════════════════════════════════════════════════════════════ */
+function sparkline(vals,opts){
+  const o=opts||{};
+  const pts=vals.map((v,i)=>({i,v})).filter(p=>p.v!=null);
+  const ns="http://www.w3.org/2000/svg";
+  const svg=document.createElementNS(ns,"svg");
+  svg.setAttribute("viewBox","0 0 100 34");
+  svg.setAttribute("preserveAspectRatio","none");
+  svg.setAttribute("role","img");
+  svg.setAttribute("aria-label",o.aria||"trend");
+  if(pts.length<2){
+    const t=document.createElementNS(ns,"text");
+    t.setAttribute("x","0"); t.setAttribute("y","22");
+    t.setAttribute("font-size","9"); t.setAttribute("fill","var(--ink-soft)");
+    t.setAttribute("font-family","JetBrains Mono, monospace");
+    t.textContent=pts.length?"single reading":"no data";
+    svg.appendChild(t); return svg;
+  }
+  const finite=pts.map(p=>p.v);
+  let lo=Math.min.apply(null,finite), hi=Math.max.apply(null,finite);
+  if(o.target!=null){ lo=Math.min(lo,o.target); hi=Math.max(hi,o.target); }
+  if(hi===lo){ hi=lo+1; lo=lo-1; }
+  const n=vals.length-1||1;
+  const X=i=>(i/n)*100;
+  const Y=v=>32-((v-lo)/(hi-lo))*30;
+  if(o.target!=null){
+    const g=document.createElementNS(ns,"line");
+    g.setAttribute("x1","0"); g.setAttribute("x2","100");
+    g.setAttribute("y1",Y(o.target)); g.setAttribute("y2",Y(o.target));
+    g.setAttribute("stroke","var(--ink-soft)"); g.setAttribute("stroke-width","0.6");
+    g.setAttribute("stroke-dasharray","2.5 2.5"); g.setAttribute("vector-effect","non-scaling-stroke");
+    svg.appendChild(g);
+  }
+  // Break the line across gaps rather than interpolating — a missing week is
+  // missing data, not a straight line between two real readings.
+  let d="",pen=false,prev=-9;
+  pts.forEach(p=>{
+    const cmd=(!pen||p.i!==prev+1)?"M":"L";
+    d+=cmd+X(p.i).toFixed(2)+" "+Y(p.v).toFixed(2)+" ";
+    pen=true; prev=p.i;
+  });
+  const path=document.createElementNS(ns,"path");
+  path.setAttribute("d",d.trim());
+  path.setAttribute("fill","none");
+  path.setAttribute("stroke",o.color||"var(--swim)");
+  path.setAttribute("stroke-width","1.6");
+  path.setAttribute("stroke-linecap","round");
+  path.setAttribute("stroke-linejoin","round");
+  path.setAttribute("vector-effect","non-scaling-stroke");
+  svg.appendChild(path);
+  const last=pts[pts.length-1];
+  const dot=document.createElementNS(ns,"circle");
+  dot.setAttribute("cx",X(last.i)); dot.setAttribute("cy",Y(last.v)); dot.setAttribute("r","2.2");
+  dot.setAttribute("fill",o.color||"var(--swim)");
+  svg.appendChild(dot);
+  return svg;
+}
+const SRC_COLOR={garmin:"var(--swim)",derived:"var(--bike)",weeks:"var(--run)",manual:"var(--brick)"};
+
+function metricCard(key,buckets){
+  const m=METRICS[key];
+  const series=metricSeries(key,buckets);
+  const known=series.filter(v=>v!=null);
+  const c=el("div","mcard");
+  const lab=el("div","mk-l");
+  const dot=el("span","src-dot"); dot.style.background=SRC_COLOR[m.src]||"var(--ink-soft)";
+  dot.title=m.src;
+  lab.appendChild(dot);
+  lab.appendChild(document.createTextNode(m.label));
+  c.appendChild(lab);
+  const last=known.length?known[known.length-1]:null;
+  c.appendChild(el("div","mk-v",fmtMetric(key,last)));
+  const first=known.length?known[0]:null;
+  const cls=deltaClass(key,first,last);
+  const d=el("div","mk-d "+cls);
+  if(known.length>1){
+    const diff=last-first;
+    d.textContent=(diff>=0?"+":"")+m.fmt(diff)+" over "+known.length+" "+
+      ((buckets[0]&&buckets[0].gran==="week")?"weeks":"months");
+  }else{
+    d.textContent=known.length?"one reading":"no data in range";
+  }
+  c.appendChild(d);
+  c.appendChild(sparkline(series,{target:m.target,
+    color:cls==="up"?"var(--good)":(cls==="down"?"var(--bad)":"var(--ink-soft)"),
+    aria:m.label+" trend, "+known.length+" points"}));
+  return c;
+}
+
+function renderProgress(){
+  viewMode="progress";
+  setNav("progBtn");
+  const v=document.getElementById("view");
+  v.innerHTML="";
+
+  const period=state.settings.period||"12m", gran=state.settings.gran||"month";
+  const buckets=buildBuckets(period,gran);
+
+  v.appendChild(buildPeriodControls(period,gran,buckets));
+
+  const pinned=METRIC_KEYS.filter(k=>METRICS[k].pin&&hasAnyData(k,buckets));
+  if(pinned.length){
+    v.appendChild(el("div","sec-head","Headline"));
+    const g=el("div","mgrid");
+    pinned.forEach(k=>g.appendChild(metricCard(k,buckets)));
+    v.appendChild(g);
+  }
+
+  let shown=0;
+  MGROUPS.forEach(([gk,glabel])=>{
+    const keys=METRIC_KEYS.filter(k=>METRICS[k].group===gk&&hasAnyData(k,buckets));
+    if(!keys.length) return;
+    shown+=keys.length;
+    const h=el("div","grp-head",glabel);
+    h.appendChild(el("span",null,keys.length+" metric"+(keys.length===1?"":"s")));
+    v.appendChild(h);
+    const g=el("div","mgrid");
+    keys.forEach(k=>g.appendChild(metricCard(k,buckets)));
+    v.appendChild(g);
+  });
+
+  if(!shown){
+    const p=el("div","panel");
+    p.appendChild(el("div","muted",
+      "No metrics in this period yet. Connect Strava for the derived metrics, or "+
+      "import a metrics file for the wellness ones."));
+    v.appendChild(p);
+  }
+
+  v.appendChild(el("div","sec-head","Data coverage"));
+  v.appendChild(buildCoveragePanel(buckets));
+}
+
+function buildPeriodControls(period,gran,buckets){
+  const row=el("div","ctl-row");
+  row.appendChild(el("span","ctl-lbl","Period"));
+  const p=el("div","seg-ctl");
+  Object.keys(PERIODS).forEach(k=>{
+    const b=el("button",null,k==="all"?"All":k);
+    if(k===period) b.className="on";
+    b.addEventListener("click",()=>{ state.settings.period=k; schedule(); renderProgress(); });
+    p.appendChild(b);
+  });
+  row.appendChild(p);
+  row.appendChild(el("span","ctl-lbl","By"));
+  const g=el("div","seg-ctl");
+  [["week","Week"],["month","Month"]].forEach(([k,lab])=>{
+    const b=el("button",null,lab);
+    if(k===gran) b.className="on";
+    b.addEventListener("click",()=>{ state.settings.gran=k; schedule(); renderProgress(); });
+    g.appendChild(b);
+  });
+  row.appendChild(g);
+  const n=buckets.length;
+  row.appendChild(el("span","ctl-lbl",
+    n+" "+(gran==="week"?"week":"month")+(n===1?"":"s")+
+    (buckets.length?" \u00b7 "+buckets[0].label+" \u2192 "+buckets[n-1].label:"")));
+  return row;
+}
+
+/**
+ * Data coverage — where every number comes from and how complete it is.
+ * Generated from the registry plus the store's own provenance, so it documents
+ * itself as metrics are added. Manual metrics get an editable cell.
+ */
+function buildCoveragePanel(buckets){
+  const p=el("div","panel");
+  p.appendChild(Object.assign(el("h3"),{textContent:"Where the data comes from"}));
+
+  const legend=el("div","int-legend");
+  legend.style.marginBottom="12px";
+  [["garmin","Imported"],["derived","Recomputed from activities"],
+   ["weeks","From your weekly log"],["manual","Typed by hand"]].forEach(([k,lab])=>{
+    const d=el("div");
+    const dot=el("span","src-dot"); dot.style.background=SRC_COLOR[k];
+    dot.style.display="inline-block"; dot.style.marginRight="5px";
+    d.appendChild(dot); d.appendChild(document.createTextNode(lab));
+    legend.appendChild(d);
+  });
+  p.appendChild(legend);
+
+  const tb=el("table","mtable");
+  tb.innerHTML="<thead><tr><th>Metric</th><th>Group</th><th>Source</th><th>Days</th>"+
+    "<th>Coverage</th><th>From</th><th>To</th><th>Rollup</th><th>Latest</th></tr></thead>";
+  const body=el("tbody");
+  const today=isoOf(new Date());
+
+  MGROUPS.forEach(([gk,glabel])=>{
+    METRIC_KEYS.filter(k=>METRICS[k].group===gk).forEach(k=>{
+      const m=METRICS[k], prov=metrics.sources[k]||null;
+      const series=metricSeries(k,buckets);
+      const known=series.filter(x=>x!=null);
+      const tr=el("tr"); if(!known.length) tr.className="dim";
+
+      const name=el("td");
+      const dot=el("span","src-dot");
+      dot.style.cssText="background:"+(SRC_COLOR[m.src]||"var(--ink-soft)")+
+        ";display:inline-block;margin-right:6px;vertical-align:middle";
+      name.appendChild(dot); name.appendChild(document.createTextNode(m.label));
+      tr.appendChild(name);
+      tr.appendChild(el("td",null,glabel));
+      tr.appendChild(el("td",null,m.src));
+
+      // Days and coverage only mean something for stored metrics; derived and
+      // weeks-sourced metrics are as complete as the data behind them.
+      if(m.src==="garmin"||m.src==="manual"){
+        const store=m.src==="manual"?metrics.manual:metrics.days;
+        const ds=Object.keys(store).filter(d=>store[d][k]!=null).sort();
+        tr.appendChild(el("td",null,ds.length?String(ds.length):"\u2014"));
+        const cov=el("td");
+        if(prov&&prov.coveragePct!=null){
+          const wrap=el("div");
+          wrap.style.cssText="display:flex;align-items:center;gap:6px;justify-content:flex-end";
+          const bar=el("div","cov-bar"); bar.style.width="46px";
+          const fill=el("div","cov-fill");
+          fill.style.width=clamp(prov.coveragePct,0,100)+"%";
+          fill.style.background=prov.coveragePct>=90?"var(--good)":
+            (prov.coveragePct>=60?"var(--warn)":"var(--bad)");
+          bar.appendChild(fill);
+          wrap.appendChild(bar);
+          wrap.appendChild(el("span",null,prov.coveragePct+"%"));
+          cov.appendChild(wrap);
+        }else cov.textContent="\u2014";
+        tr.appendChild(cov);
+        tr.appendChild(el("td",null,ds.length?ds[0]:"\u2014"));
+        tr.appendChild(el("td",null,ds.length?ds[ds.length-1]:"\u2014"));
+      }else{
+        tr.appendChild(el("td",null,String(known.length)));
+        const cov=el("td");
+        cov.textContent=series.length?Math.round(known.length/series.length*100)+"%":"\u2014";
+        tr.appendChild(cov);
+        tr.appendChild(el("td",null,"\u2014"));
+        tr.appendChild(el("td",null,"\u2014"));
+      }
+      tr.appendChild(el("td",null,m.src==="derived"?"recomputed":(prov&&prov.intraday?prov.intraday+" / "+m.agg:(m.agg||"\u2014"))));
+
+      const lastCell=el("td");
+      if(m.src==="manual"){
+        // Manual metrics are editable in place. They write to metrics.manual,
+        // a separate block from imported days, so a re-import cannot clobber them.
+        const inp=el("input");
+        inp.type="text";
+        const cur=(metrics.manual[today]&&metrics.manual[today][k]);
+        const latest=known.length?known[known.length-1]:null;
+        // Only ever prefill a RAW number. Prefilling m.fmt(105) put "1:45" in the
+        // box, which Number() reads as NaN the moment you tab out of it.
+        inp.value = cur!=null ? String(cur) : "";
+        inp.placeholder = latest!=null ? fmtMetric(k,latest) : "\u2014";
+        inp.title = "Today's "+m.label+(m.unit?" in "+m.unit.replace(/^\//,"per "):"")+
+          (latest!=null?" \u00b7 last recorded "+fmtMetric(k,latest):"");
+        inp.dataset.manual=k;
+        lastCell.appendChild(inp);
+      }else{
+        lastCell.textContent=known.length?fmtMetric(k,known[known.length-1]):"\u2014";
+      }
+      tr.appendChild(lastCell);
+      body.appendChild(tr);
+    });
+  });
+  tb.appendChild(body);
+  p.appendChild(tb);
+
+  const foot=el("div","int-note");
+  const dayN=metricsDayCount();
+  foot.textContent=
+    "Derived metrics are recomputed from your activities every time this page renders, never stored — "+
+    "so a corrected calculation fixes the whole history at once. Imported and hand-entered values live "+
+    "in separate blocks of traininglog/metrics ("+dayN+" day"+(dayN===1?"":"s")+" held), and neither can "+
+    "overwrite the other: on read, a hand-entered value wins for the same day and metric. Coverage is "+
+    "the share of days between a metric's first and last reading that actually have one — sleep and HRV "+
+    "sit below 100% because you do not wear the watch every night.";
+  p.appendChild(foot);
+  return p;
+}
+
 /* ── HOME: analysis-first dashboard ── */
 function renderHome(){
   viewMode="home";
-  document.getElementById("homeBtn").classList.add("active");
-  document.getElementById("monBtn").classList.remove("active");
+  setNav("homeBtn");
   const v=document.getElementById("view");
   v.innerHTML="";
 
@@ -1404,7 +2184,7 @@ function buildIntensityPanel(iso){
     }
     head.innerHTML=`<b>${esc(label)}</b> · ${fmtHrs(t.hrSecs/3600)} measured`+
       (t.hrCoveragePct!=null&&t.hrCoveragePct<100
-        ? ` · heart rate recorded for ${t.hrCoveragePct}% of it` : "");
+        ? ` · ${t.hrCoveragePct}% of session time had a strap` : "");
     box.appendChild(head);
 
     const b=el("div","int-bar");
@@ -1460,6 +2240,18 @@ function buildIntensityPanel(iso){
     });
     tb.appendChild(body); p.appendChild(tb);
   }
+
+  const note=el("div","int-note");
+  note.textContent=
+    "How this is measured: Strava reports one average heart rate per activity, not a "+
+    "zone histogram, so each session is classified by its average and the whole session "+
+    "counts toward that bucket. This reads HARSHER than a true time-in-zone figure — a "+
+    "run averaging 165 counts as fully hard here, while a watch would credit the "+
+    "warm-up and cool-down minutes as easy. Do not compare these percentages to the "+
+    "ones in Garmin; compare them to last month's. The metric still answers the "+
+    "question it exists for, because a genuinely easy session has a genuinely low "+
+    "average and will land in the easy bucket. Thresholds are editable from the header.";
+  p.appendChild(note);
   return p;
 }
 
@@ -1606,12 +2398,14 @@ function buildRollingTable(n){
 /* ── MONTH VIEW: breakdown, weeks not collapsible (your note #6) ── */
 function renderMonth(){
   viewMode="month";
-  document.getElementById("homeBtn").classList.remove("active");
-  document.getElementById("monBtn").classList.add("active");
+  setNav("monBtn");
   const v=document.getElementById("view");
   v.innerHTML="";
 
   const mk=currentMonth||monthKeyOf(thisMondayISO());
+  // The month picker belongs to the month view, not the top nav — the nav
+  // switches views, it does not select records.
+  v.appendChild(buildMonthPicker(mk));
   const weeks=weeksInMonth(mk);
   const t=totalsForMonth(mk);
 
@@ -1870,62 +2664,26 @@ function autoGrow(ta){ta.style.height="auto";ta.style.height=ta.scrollHeight+"px
 /* ════════════════════════════════════════════════════════════
    NAVIGATION
    ════════════════════════════════════════════════════════════ */
-function buildMonthMenu(){
-  const menu=document.getElementById("monMenu");
-  menu.innerHTML="";
-  const months=monthsWithData();
-  const nowMk=monthKeyOf(thisMondayISO());
-  let lastYear=null;
-  months.slice().reverse().forEach(mk=>{
-    const yr=mk.slice(0,4);
-    if(yr!==lastYear){
-      menu.appendChild(el("div","mon-yr",yr));
-      lastYear=yr;
-    }
-    const n=weeksInMonth(mk).length;
-    const o=el("div","mon-opt"+(mk===currentMonth?" active":""));
-    o.appendChild(document.createTextNode(MONTH_NAMES[parseInt(mk.slice(5,7),10)-1]));
-    const s=el("small",null,mk===nowMk?"current":(n+" wks"));
-    o.appendChild(s);
-    o.dataset.month=mk;
-    menu.appendChild(o);
-  });
-}
 function goMonth(mk){
+  if(!mk) return;
   currentMonth=mk;
-  document.getElementById("monLabel").textContent=monthLabel(mk);
-  buildMonthMenu();
-  closeMenu();
   renderMonth();
   window.scrollTo({top:0,behavior:"smooth"});
-}
-function closeMenu(){
-  document.getElementById("monMenu").classList.remove("show");
-  document.getElementById("monBtn").classList.remove("open");
 }
 
 /* ════════════════════════════════════════════════════════════
    EVENTS
    ════════════════════════════════════════════════════════════ */
 document.getElementById("homeBtn").addEventListener("click",()=>{
-  renderHome(); window.scrollTo({top:0,behavior:"smooth"});
+  if(viewMode!=="home") renderHome();
 });
-document.getElementById("monBtn").addEventListener("click",e=>{
-  e.stopPropagation();
+document.getElementById("monBtn").addEventListener("click",()=>{
   if(!currentMonth) currentMonth=monthKeyOf(thisMondayISO());
-  buildMonthMenu();
-  document.getElementById("monBtn").classList.toggle("open");
-  document.getElementById("monMenu").classList.toggle("show");
+  renderMonth();
 });
-document.addEventListener("click",e=>{
-  if(!e.target.closest(".mon-wrap")) closeMenu();
-});
+document.getElementById("progBtn").addEventListener("click",renderProgress);
 
-/* month option */
-document.addEventListener("click",e=>{
-  const mo=e.target.closest("[data-month]");
-  if(mo&&mo.classList.contains("mon-opt")){ goMonth(mo.dataset.month); }
-});
+
 
 /* week actions */
 document.addEventListener("click",e=>{
@@ -2013,19 +2771,42 @@ document.addEventListener("input",e=>{
    EXPORT — everything in one file (your Q5)
    ════════════════════════════════════════════════════════════ */
 function updateExportBtn(){
+  // .io-btn is display:none in CSS and only revealed here.
   const b=document.getElementById("exportBtn");
   if(b){
-    // Always available — the plan, habits and comments are worth exporting even
-    // with no Strava connection.
-    b.textContent=allActivities.length
-      ? "↓ Export JSON · "+allActivities.length+" activities"
-      : "↓ Export JSON";
+    // Always available — the plan, habits, comments and metrics are worth
+    // exporting even with no Strava connection.
     b.style.display="block";
+    b.title="Download everything: plan, comments, habits, settings, metrics, "+
+      "calorie cache and "+allActivities.length+" activities";
   }
-  // .export-btn is display:none in CSS and only revealed here. Import must be
-  // revealed by the same call or the button exists but is never visible.
   const i=document.getElementById("importBtn");
-  if(i) i.style.display=_loadOk?"block":"none";   // hidden outright when writes are blocked
+  if(i){
+    const writable=_loadOk||_metricsLoadOk;
+    i.style.display="block";
+    i.disabled=!writable;
+    i.title=writable
+      ? "Import a plan JSON, a metrics JSON, a full export, or a Garmin export .zip"
+      : "Import is disabled because your data could not be read this session";
+  }
+}
+/**
+ * Every metric, rolled up monthly, alongside the raw stores — so an export is
+ * self-sufficient for analysis without re-deriving anything.
+ */
+function exportMetricSeries(){
+  const buckets=buildBuckets("all","month");
+  const out={};
+  METRIC_KEYS.forEach(k=>{
+    const m=METRICS[k];
+    const series=metricSeries(k,buckets);
+    if(!series.some(v=>v!=null)) return;
+    const byMonth={};
+    buckets.forEach((b,i)=>{ if(series[i]!=null) byMonth[b.key]=+series[i].toFixed(4); });
+    out[k]={label:m.label,group:m.group,src:m.src,unit:m.unit||null,
+            agg:m.src==="derived"?"recomputed":(m.agg||null),months:byMonth};
+  });
+  return out;
 }
 function exportJSON(){
   const weeks=state.weeks;
@@ -2047,8 +2828,9 @@ function exportJSON(){
   const payload={
     exportedAt:new Date().toISOString(),
     schemaVersion:SCHEMA_VERSION,
-    state,                       // raw weeks — full fidelity
-    derived:{months},            // computed rollups for analysis
+    state,                       // raw weeks, settings — full fidelity
+    metrics,                     // v37 wellness store, imported + hand-entered
+    derived:{months,metrics:exportMetricSeries()},
     calorieCache:calCache,
     activities:allActivities
   };
@@ -2073,6 +2855,264 @@ document.getElementById("exportBtn").addEventListener("click",exportJSON);
    a plan file has no business touching them — so importing the wrong file
    costs you a plan, never your notes.
    ════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   GARMIN .ZIP -> METRICS  (v37)
+   A Garmin Connect export is a zip of JSON files. Reading it here means there
+   is no offline conversion step. No library: the central directory is a simple
+   binary format and DecompressionStream("deflate-raw") is native. Only the
+   handful of files that carry metrics are inflated, so a 27 MB export costs a
+   fraction of that in work.
+   ════════════════════════════════════════════════════════════ */
+async function inflateRaw(bytes){
+  if(typeof DecompressionStream==="undefined")
+    throw new Error("This browser cannot unzip. Use the offline converter, or import a metrics JSON.");
+  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+/** Minimal zip reader: central directory only, no ZIP64, no encryption. */
+async function openZip(file){
+  const buf=await file.arrayBuffer();
+  const dv=new DataView(buf), u8=new Uint8Array(buf);
+  // The EOCD sits at the end, after a comment of up to 64 KB.
+  let eocd=-1;
+  for(let i=buf.byteLength-22;i>=Math.max(0,buf.byteLength-65557);i--){
+    if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; }
+  }
+  if(eocd<0) throw new Error("Not a readable zip file.");
+  const count=dv.getUint16(eocd+10,true);
+  let cd=dv.getUint32(eocd+16,true);
+  if(count===0xFFFF||cd===0xFFFFFFFF)
+    throw new Error("ZIP64 archives are not supported. Unzip it and import the metrics JSON instead.");
+  const dec=new TextDecoder();
+  const entries=[];
+  for(let i=0;i<count;i++){
+    if(dv.getUint32(cd,true)!==0x02014b50) break;
+    const method=dv.getUint16(cd+10,true);
+    const compSize=dv.getUint32(cd+20,true);
+    const nameLen=dv.getUint16(cd+28,true);
+    const extraLen=dv.getUint16(cd+30,true);
+    const commentLen=dv.getUint16(cd+32,true);
+    const offset=dv.getUint32(cd+42,true);
+    const name=dec.decode(u8.subarray(cd+46,cd+46+nameLen));
+    entries.push({name,method,compSize,offset});
+    cd+=46+nameLen+extraLen+commentLen;
+  }
+  async function read(entry){
+    if(dv.getUint32(entry.offset,true)!==0x04034b50) throw new Error("Corrupt entry: "+entry.name);
+    const nameLen=dv.getUint16(entry.offset+26,true);
+    const extraLen=dv.getUint16(entry.offset+28,true);
+    const start=entry.offset+30+nameLen+extraLen;
+    const raw=u8.subarray(start,start+entry.compSize);
+    if(entry.method===0) return raw;
+    if(entry.method===8) return await inflateRaw(raw);
+    throw new Error("Unsupported compression in "+entry.name);
+  }
+  async function readJSON(entry){
+    const bytes=await read(entry);
+    const text=new TextDecoder("utf-8").decode(bytes).replace(/^\uFEFF/,"");
+    if(!text.trim()) return null;
+    try{ return JSON.parse(text); }catch(e){ return null; }
+  }
+  return {entries,read,readJSON};
+}
+
+/* Intraday reduction, mirroring the offline converter exactly. Readiness is a
+   wake-up number and Garmin rewrites it downward as you train, so averaging a
+   day understates it badly; VO2max takes the most recent reading. */
+const GARMIN_INTRADAY={vo2max:"last",vo2maxBike:"last",readiness:"first",
+  ctl:"last",atl:"last",acwr:"last",steps:"max",activeKcal:"max",totalKcal:"max",
+  vigorousMin:"max",moderateMin:"max",sweatLossMl:"sum",weightKg:"last",bmi:"last",
+  bioAge:"last",pred5kSec:"last",pred10kSec:"last",predHMSec:"last",predMSec:"last"};
+
+/**
+ * Garmin's calendarDate arrives three ways: an ISO string, an epoch in ms
+ * (MetricsAcuteTrainingLoad), or a formatted GMT string. The epoch form is
+ * UTC MIDNIGHT, so reading it with local date parts shifts every record back a
+ * day in any timezone behind UTC — which silently mislabelled 394 training-load
+ * values when tested in America/New_York. Always resolve to the UTC date.
+ */
+function garminISO(v){
+  const utcISO=d=>isNaN(d)?null:d.getUTCFullYear()+"-"+pad2(d.getUTCMonth()+1)+"-"+pad2(d.getUTCDate());
+  if(v==null) return null;
+  if(typeof v==="string"){
+    const t=v.trim();
+    if(/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0,10);   // already a plain date
+    return utcISO(new Date(t));
+  }
+  let n=num(v); if(n===null) return null;
+  if(n>1e11) n/=1000;
+  if(n<1e8) return null;
+  return utcISO(new Date(n*1000));
+}
+
+async function garminZipToMetrics(zip,progress){
+  const bag={};                                  // iso -> key -> [values]
+  const prov={};
+  const add=(iso,key,value,fileName,srcLabel)=>{
+    if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    const v=num(value); if(v===null) return;
+    if(!bag[iso]) bag[iso]={};
+    if(!bag[iso][key]) bag[iso][key]=[];
+    bag[iso][key].push(v);
+    prov[key]={src:srcLabel||"garmin",file:fileName,intraday:GARMIN_INTRADAY[key]||"mean"};
+  };
+  const pick=rx=>zip.entries.filter(e=>rx.test(e.name.split("/").pop()));
+  const each=async(rx,fn)=>{
+    for(const e of pick(rx)){
+      if(progress) progress(e.name.split("/").pop());
+      const d=await zip.readJSON(e);
+      if(!d) continue;
+      const arr=Array.isArray(d)?d:[d];
+      for(const r of arr){ if(r&&typeof r==="object") fn(r,e.name.split("/").pop()); }
+    }
+  };
+
+  await each(/MetricsMaxMetData.*\.json$/i,(r,f)=>{
+    const iso=garminISO(r.calendarDate);
+    const key=String(r.sport||"").toUpperCase()==="CYCLING"?"vo2maxBike":"vo2max";
+    add(iso,key,r.vo2MaxValue,f);
+  });
+  await each(/UDSFile.*\.json$/i,(r,f)=>{
+    const iso=garminISO(r.calendarDate); if(!iso) return;
+    add(iso,"rhr",r.restingHeartRate,f);
+    add(iso,"steps",r.totalSteps,f);
+    add(iso,"activeKcal",r.activeKilocalories,f);
+    add(iso,"totalKcal",r.totalKilocalories,f);
+    add(iso,"vigorousMin",r.vigorousIntensityMinutes,f);
+    add(iso,"moderateMin",r.moderateIntensityMinutes,f);
+    const list=(r.allDayStress&&r.allDayStress.aggregatorList)||[];
+    for(const a of list){
+      if(a&&a.type==="TOTAL"){
+        const lvl=num(a.averageStressLevel);
+        if(lvl!==null&&lvl>=0) add(iso,"stressAvg",lvl,f);
+        break;
+      }
+    }
+    const bb=r.bodyBattery||{};
+    add(iso,"bbCharged",bb.chargedValue,f);
+    add(iso,"bbDrained",bb.drainedValue,f);
+  });
+  await each(/sleepData\.json$/i,(r,f)=>{
+    const iso=garminISO(r.calendarDate); if(!iso) return;
+    const secs=(num(r.deepSleepSeconds)||0)+(num(r.lightSleepSeconds)||0)+(num(r.remSleepSeconds)||0);
+    if(secs>3600){                               // ignore stubs and naps
+      add(iso,"sleepH",secs/3600,f);
+      add(iso,"sleepDeepMin",(num(r.deepSleepSeconds)||0)/60,f);
+      add(iso,"sleepRemMin",(num(r.remSleepSeconds)||0)/60,f);
+    }
+    add(iso,"sleepScore",r.sleepScores&&r.sleepScores.overallScore,f);
+    add(iso,"sleepStress",r.avgSleepStress,f);
+  });
+  await each(/healthStatusData\.json$/i,(r,f)=>{
+    const iso=garminISO(r.calendarDate); if(!iso) return;
+    const MAP={HRV:"hrv",RESPIRATION:"respiration",SKIN_TEMP_C:"skinTempDelta"};
+    for(const m of (r.metrics||[])){
+      const k=MAP[m&&m.type]; if(k) add(iso,k,m.value,f);
+    }
+  });
+  await each(/MetricsAcuteTrainingLoad.*\.json$/i,(r,f)=>{
+    const iso=garminISO(r.calendarDate); if(!iso) return;
+    add(iso,"atl",r.dailyTrainingLoadAcute,f);
+    add(iso,"ctl",r.dailyTrainingLoadChronic,f);
+    add(iso,"acwr",r.dailyAcuteChronicWorkloadRatio,f);
+  });
+  await each(/TrainingReadinessDTO.*\.json$/i,(r,f)=>{
+    const iso=garminISO(r.calendarDate); if(!iso) return;
+    add(iso,"readiness",r.score,f);
+    add(iso,"hrvWeekly",r.hrvWeeklyAverage,f);
+  });
+  await each(/RunRacePredictions.*\.json$/i,(r,f)=>{
+    const iso=garminISO(r.calendarDate); if(!iso) return;
+    add(iso,"pred5kSec",r.raceTime5K,f);
+    add(iso,"pred10kSec",r.raceTime10K,f);
+    add(iso,"predHMSec",r.raceTimeHalf,f);
+    add(iso,"predMSec",r.raceTimeMarathon,f);
+  });
+  // Weight is not a series in the export, but BMI is and height is, so weight
+  // is recoverable. Provenance says so rather than pretending it was measured.
+  let heightCm=null;
+  await each(/userBioMetricProfileData\.json$/i,r=>{ heightCm=num(r.height)||heightCm; });
+  await each(/fitnessAgeData\.json$/i,(r,f)=>{
+    const iso=garminISO(r.asOfDateGmt); if(!iso) return;
+    const bmi=num(r.bmi);
+    add(iso,"bmi",bmi,f);
+    add(iso,"bioAge",r.currentBioAge,f);
+    if(bmi!==null&&heightCm) add(iso,"weightKg",bmi*Math.pow(heightCm/100,2),f,"garmin:bmi*height");
+  });
+  await each(/HydrationLogFile.*\.json$/i,(r,f)=>{
+    const iso=garminISO(r.calendarDate); const loss=num(r.estimatedSweatLossInML);
+    if(!iso||loss===null) return;
+    add(iso,"sweatLossMl",loss,f);
+    const dur=num(r.duration);
+    if(dur&&dur>1800) add(iso,"sweatRateMlH",loss/(dur/3600),f);
+  });
+
+  const days={};
+  Object.keys(bag).sort().forEach(iso=>{
+    const row={};
+    Object.keys(bag[iso]).forEach(k=>{
+      const v=aggregate(bag[iso][k],GARMIN_INTRADAY[k]||"mean");
+      if(v!==null) row[k]=Math.round(v*1000)/1000;
+    });
+    if(Object.keys(row).length) days[iso]=row;
+  });
+  const sources={};
+  Object.keys(prov).forEach(k=>{
+    const ds=Object.keys(days).filter(d=>days[d][k]!=null).sort();
+    if(!ds.length) return;
+    const span=Math.round((dateFromISO(ds[ds.length-1])-dateFromISO(ds[0]))/86400000)+1;
+    sources[k]={src:prov[k].src,file:prov[k].file,days:ds.length,from:ds[0],to:ds[ds.length-1],
+                coveragePct:span?Math.round(ds.length/span*100):null,intraday:prov[k].intraday};
+  });
+  return {version:1,savedAt:new Date().toISOString(),days,sources,manual:{}};
+}
+
+/* A metrics file is recognised by a `days` (or `manual`) map of ISO dates. */
+function looksLikeMetrics(raw){
+  if(!raw||typeof raw!=="object") return false;
+  const probe=o=>o&&typeof o==="object"&&!Array.isArray(o)&&
+    Object.keys(o).some(k=>/^\d{4}-\d{2}-\d{2}$/.test(k));
+  return probe(raw.days)||probe(raw.manual);
+}
+async function importMetrics(raw){
+  if(!_metricsLoadOk){
+    banner("Metrics could not be read this session, so nothing was imported. Please reload.",true);
+    return;
+  }
+  const incoming=normMetrics(raw);
+  const dayKeys=Object.keys(incoming.days);
+  if(!dayKeys.length&&!Object.keys(incoming.manual).length){
+    banner("That metrics file has no recognised metrics in it. Unknown keys are ignored — "+
+           "check the names against the registry.",true);
+    return;
+  }
+  // Merge per day, per key. Incoming wins for the keys it carries; every other
+  // key on that day is left alone, so importing a partial file is safe.
+  let days=0, vals=0, newKeys=0;
+  const before=new Set(Object.keys(metrics.sources));
+  dayKeys.forEach(d=>{
+    const row=incoming.days[d];
+    if(!metrics.days[d]) { metrics.days[d]={}; }
+    Object.keys(row).forEach(k=>{ metrics.days[d][k]=row[k]; vals++; });
+    days++;
+  });
+  // The `manual` block in an incoming file is additive and never clears yours.
+  Object.keys(incoming.manual).forEach(d=>{
+    if(!metrics.manual[d]) metrics.manual[d]={};
+    Object.keys(incoming.manual[d]).forEach(k=>{ metrics.manual[d][k]=incoming.manual[d][k]; });
+  });
+  Object.keys(incoming.sources).forEach(k=>{
+    metrics.sources[k]=incoming.sources[k];
+    if(!before.has(k)) newKeys++;
+  });
+  const saved=await persistMetrics();
+  const known=Object.keys(metrics.sources).length;
+  banner(`Imported ${vals} value${vals===1?"":"s"} across ${days} day${days===1?"":"s"}, `+
+         `${known} metric${known===1?"":"s"} tracked (${newKeys} new). `+
+         `Hand-entered values untouched.`+
+         (saved?"":" NOT SAVED to the cloud — kept locally, see the console."),!saved);
+  if(viewMode!=="progress") renderProgress(); else renderSafe();
+}
 function extractWeeksMap(raw){
   const cand = (raw&&raw.state&&raw.state.weeks) ? raw.state.weeks
              : (raw&&raw.weeks)                  ? raw.weeks
@@ -2082,7 +3122,34 @@ function extractWeeksMap(raw){
   return keys.length?{map:cand,keys}:null;
 }
 async function importPlan(file){
-  if(!_loadOk){
+  const isZip=/\.zip$/i.test(file.name||"")||file.type==="application/zip";
+
+  // A Garmin zip only ever writes the metrics document, so it needs the metrics
+  // guard, not the state guard.
+  if(isZip){
+    if(!_metricsLoadOk){
+      banner("Metrics could not be read this session, so nothing was imported. Please reload.",true);
+      return;
+    }
+    banner("Reading the Garmin export\u2026");
+    try{
+      const zip=await openZip(file);
+      const built=await garminZipToMetrics(zip,name=>banner("Reading "+name+"\u2026"));
+      const n=Object.keys(built.days).length;
+      if(!n){
+        banner("No metrics found in that zip. Expected a Garmin Connect export "+
+               "containing UDSFile, sleepData, MetricsMaxMetData and similar.",true);
+        return;
+      }
+      await importMetrics(built);
+    }catch(e){
+      console.error("zip import failed:",e);
+      banner("Could not read that zip: "+e.message,true);
+    }
+    return;
+  }
+
+  if(!_loadOk&&!_metricsLoadOk){
     banner("Editing is disabled this session because your data could not be read. "+
            "Nothing was imported. Please reload.",true);
     return;
@@ -2094,10 +3161,17 @@ async function importPlan(file){
     banner("That file is not valid JSON, so nothing was imported.",true);
     return;
   }
+  // One button, several shapes. A metrics file goes to its own document.
+  if(looksLikeMetrics(raw)){ await importMetrics(raw); return; }
+  if(!_loadOk){
+    banner("The plan is read-only this session because your data could not be read. "+
+           "Nothing was imported. Please reload.",true);
+    return;
+  }
   const found=extractWeeksMap(raw);
   if(!found){
-    banner("No weeks found. Expected an object keyed by Monday dates "+
-           "(\"YYYY-MM-DD\"), or a full export containing state.weeks.",true);
+    banner("Unrecognised file. Expected a plan (weeks keyed by Monday dates) or "+
+           "a metrics file (a `days` map keyed by date).",true);
     return;
   }
 
@@ -2129,6 +3203,21 @@ async function importPlan(file){
 
   if(!added&&!updated){ banner("Nothing in that file could be read as a week.",true); return; }
 
+  // A full export contains the plan AND the metrics store. Take both.
+  let alsoMetrics=0;
+  if(raw&&raw.metrics&&looksLikeMetrics(raw.metrics)&&_metricsLoadOk){
+    const inc=normMetrics(raw.metrics);
+    Object.keys(inc.days).forEach(d=>{
+      if(!metrics.days[d]) metrics.days[d]={};
+      Object.keys(inc.days[d]).forEach(k=>{ metrics.days[d][k]=inc.days[d][k]; alsoMetrics++; });
+    });
+    Object.keys(inc.manual).forEach(d=>{
+      if(!metrics.manual[d]) metrics.manual[d]={};
+      Object.keys(inc.manual[d]).forEach(k=>{ metrics.manual[d][k]=inc.manual[d][k]; });
+    });
+    Object.keys(inc.sources).forEach(k=>{ metrics.sources[k]=inc.sources[k]; });
+    await persistMetrics();
+  }
   const saved=await persist(true);
   const bits=[`Imported ${sessions} session${sessions===1?"":"s"} across `+
               `${added+updated} week${added+updated===1?"":"s"} `+
@@ -2137,10 +3226,10 @@ async function importPlan(file){
   if(snapped)  bits.push(`${snapped} key${snapped===1?"":"s"} snapped to its Monday.`);
   if(collided) bits.push(`${collided} duplicate week${collided===1?"":"s"} ignored (first wins).`);
   if(skipped)  bits.push(`${skipped} unreadable date${skipped===1?"":"s"} skipped.`);
+  if(alsoMetrics) bits.push(`Also took ${alsoMetrics} metric value${alsoMetrics===1?"":"s"} from the same file.`);
   if(!saved)  bits.push("NOT SAVED to the cloud — kept locally, see the console.");
   banner(bits.join(" "),!saved);
 
-  buildMonthMenu();                             // new months may now exist
   renderSafe();                                 // never yank the DOM from a caret
 }
 document.getElementById("importBtn").addEventListener("click",()=>{
@@ -2151,6 +3240,15 @@ document.getElementById("importFile").addEventListener("change",e=>{
   e.target.value="";                            // so re-picking the same file fires again
   if(f) importPlan(f);
 });
+/* Drag a plan, a metrics file or a Garmin zip anywhere onto the page. */
+["dragover","drop"].forEach(evt=>document.addEventListener(evt,e=>{
+  if(!e.dataTransfer) return;
+  e.preventDefault();
+  if(evt==="drop"){
+    const f=e.dataTransfer.files&&e.dataTransfer.files[0];
+    if(f) importPlan(f);
+  }
+}));
 
 /* ════════════════════════════════════════════════════════════
    AUTH & BOOT
@@ -2198,6 +3296,31 @@ document.getElementById("hrBtn").addEventListener("click",()=>{
   updateHrBtn(); schedule(); render();
 });
 
+/* Manual metric entry. Writes to metrics.manual — a block the Garmin importer
+   never touches — keyed on today. Blank clears the value rather than storing 0. */
+document.addEventListener("change",async e=>{
+  const inp=e.target.closest("input[data-manual]");
+  if(!inp) return;
+  const key=inp.dataset.manual;
+  if(!Object.prototype.hasOwnProperty.call(METRICS,key)) return;
+  const today=isoOf(new Date());
+  const raw=String(inp.value).trim();
+  if(!raw){
+    if(metrics.manual[today]){
+      delete metrics.manual[today][key];
+      if(!Object.keys(metrics.manual[today]).length) delete metrics.manual[today];
+    }
+    await persistMetrics(); flash("Cleared"); renderProgress(); return;
+  }
+  const v=Number(raw.replace(",","."));
+  if(!isFinite(v)){ flash("Enter a number",true); inp.focus(); return; }
+  if(!metrics.manual[today]) metrics.manual[today]={};
+  metrics.manual[today][key]=v;
+  const ok=await persistMetrics();
+  flash(ok?"Saved \u2713":"Save failed — kept locally",!ok);
+  renderProgress();
+});
+
 window.addEventListener("beforeunload",()=>{
   flushPending();                       // don't lose an edit made inside the debounce window
   if(_cacheDirty) saveCalCache();
@@ -2218,17 +3341,16 @@ onAuthStateChanged(_auth,async user=>{
 
   await loadState();
   await loadCalCache();
+  await loadMetrics();
 
   // Scaffold the remaining months of the year so every month is navigable
   // without a manual "add week" step.
   if(_loadOk && ensureYearScaffold()>0) schedule();
 
   currentMonth=monthKeyOf(thisMondayISO());
-  document.getElementById("monLabel").textContent=monthLabel(currentMonth);
   updateWeightBtn();
   updateHrBtn();
   updateExportBtn();          // export must work without Strava
-  buildMonthMenu();
   renderHome();
 
   const code=new URLSearchParams(location.search).get("code");
