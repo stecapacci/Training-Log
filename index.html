@@ -139,7 +139,6 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .int-hard{background:var(--bad)}
 .int-legend{display:flex;flex-wrap:wrap;gap:14px;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft)}
 .int-legend span.k{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:baseline}
-.int-note{font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--ink-soft);line-height:1.6;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
 .int-target{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);margin-top:2px}
 .zchip{display:inline-block;font-family:"JetBrains Mono",monospace;font-size:9px;font-weight:700;letter-spacing:.06em;padding:1px 5px;border-radius:999px;margin-left:5px;vertical-align:middle;color:#fff}
 .zchip.z-easy{background:var(--good)}
@@ -1485,18 +1484,6 @@ function buildIntensityPanel(iso){
     });
     tb.appendChild(body); p.appendChild(tb);
   }
-
-  const note=el("div","int-note");
-  note.textContent=
-    "How this is measured: Strava reports one average heart rate per activity, not a "+
-    "zone histogram, so each session is classified by its average and the whole session "+
-    "counts toward that bucket. This reads HARSHER than a true time-in-zone figure — a "+
-    "run averaging 165 counts as fully hard here, while a watch would credit the "+
-    "warm-up and cool-down minutes as easy. Do not compare these percentages to the "+
-    "ones in Garmin; compare them to last month's. The metric still answers the "+
-    "question it exists for, because a genuinely easy session has a genuinely low "+
-    "average and will land in the easy bucket. Thresholds are editable from the header.";
-  p.appendChild(note);
   return p;
 }
 
