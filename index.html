@@ -1,9 +1,23 @@
 <!doctype html>
-<!-- v35 -->
+<!-- v36 -->
 <!--
   Training Log — Stefano
   ─────────────────────────────────────────────────────────────
-  v35 structural rewrite. Key changes from v34:
+  v36. Changes from v35:
+   · IMPORT: load a plan file (a bare weeks map or a full export payload) and
+     merge it in. Replaces `planned` only — comments and habits are never
+     touched, so importing the wrong file cannot cost you your notes.
+   · INTENSITY: average heart rate per activity is bucketed into easy /
+     moderate / hard and surfaced three ways — a trend card, a distribution
+     panel with an 80/20 reference, and a per-activity chip. Thresholds live
+     in settings and are editable from the header.
+   · Timeline section removed.
+   · Schema 35 -> 36. Additive only: settings.hrEasyMax / settings.hrHardMin.
+     The Firestore document is deliberately STILL traininglog/state3 — v36
+     reads every v35 document unchanged, so there is nothing to migrate and
+     no risk of orphaning data behind a new document name.
+
+  v35 structural changes, still in force:
    · NO personal data in this file. Firestore is the sole source of truth.
    · Weeks keyed by ISO Monday date. Quarters removed entirely.
    · Months/years are derived views, never stored.
@@ -117,14 +131,20 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .missed{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--ink-soft);line-height:1.7}
 .missed .mx{color:var(--run)}
 
-/* ── timeline ── */
-.timeline-wrap{border:1px solid var(--line);background:var(--card);border-radius:var(--radius);padding:14px 16px 16px;box-shadow:var(--shadow);overflow-x:auto;margin-bottom:14px}
-.timeline{display:flex;gap:3px;min-width:560px}
-.seg{flex:1;min-width:40px;border-radius:7px;padding:7px 5px;color:#fff;position:relative;transition:transform .15s ease;cursor:pointer}
-.seg:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(21,25,31,.18)}
-.seg .ph{font-family:"JetBrains Mono",monospace;font-size:9px;text-transform:uppercase;letter-spacing:.04em;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.seg .dt{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:11px;margin-top:2px}
-.seg.is-now{outline:2px solid var(--ink);outline-offset:2px}
+/* ── intensity distribution (v36) ── */
+.int-bar{display:flex;height:26px;border-radius:8px;overflow:hidden;background:#EDF0F3;margin:4px 0 10px}
+.int-seg{display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:700;color:#fff;min-width:0;transition:width .3s;white-space:nowrap}
+.int-easy{background:var(--good)}
+.int-mod{background:var(--warn)}
+.int-hard{background:var(--bad)}
+.int-legend{display:flex;flex-wrap:wrap;gap:14px;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft)}
+.int-legend span.k{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:baseline}
+.int-note{font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--ink-soft);line-height:1.6;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+.int-target{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--ink-soft);margin-top:2px}
+.zchip{display:inline-block;font-family:"JetBrains Mono",monospace;font-size:9px;font-weight:700;letter-spacing:.06em;padding:1px 5px;border-radius:999px;margin-left:5px;vertical-align:middle;color:#fff}
+.zchip.z-easy{background:var(--good)}
+.zchip.z-mod{background:var(--warn)}
+.zchip.z-hard{background:var(--bad)}
 
 /* ── week cards ── */
 .weeks{margin-top:14px;display:flex;flex-direction:column;gap:14px}
@@ -234,10 +254,13 @@ textarea::placeholder{color:#A4AEB7}
           Connect Strava
         </button>
         <button class="signout-btn" id="weightBtn" title="Body weight used for estimated calories">75 kg</button>
+        <button class="signout-btn" id="hrBtn" title="Heart-rate thresholds for the easy / moderate / hard split">HR 140/161</button>
         <button class="signout-btn" id="signOutBtn">Sign out</button>
       </div>
       <div class="sync-status" id="syncStatus">Connecting…</div>
       <button class="export-btn" id="exportBtn">↓ Export JSON</button>
+      <button class="export-btn" id="importBtn">↑ Import plan</button>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none">
     </div>
   </div>
 
@@ -257,14 +280,14 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
 const FB={apiKey:"AIzaSyDBgcPtQIwPXxB_uC-mPlre0cExO00w4A0",authDomain:"training-log-stefano.firebaseapp.com",projectId:"training-log-stefano",storageBucket:"training-log-stefano.firebasestorage.app",messagingSenderId:"331634278951",appId:"1:331634278951:web:b6635ed280f528ae878402"};
 const _app=initializeApp(FB), _db=getFirestore(_app), _auth=getAuth(_app);
 
-const DOC_STATE   = doc(_db,"traininglog","state3");     // v35 schema
+const DOC_STATE   = doc(_db,"traininglog","state3");     // v35 + v36 (same shape)
 const DOC_LEGACY  = doc(_db,"traininglog","state2");     // v34 — read once, never written
 const DOC_ACTCACHE= doc(_db,"traininglog","actcache");   // per-activity calorie cache
 const DOC_STRAVA  = doc(_db,"secrets","strava");
 
 const STRAVA_CLIENT_ID="257298";
 const STRAVA_REDIRECT=location.origin+location.pathname;
-const SCHEMA_VERSION=35;
+const SCHEMA_VERSION=36;
 const LS_STATE="tri_v35";
 const LS_BACKUP="tri_v35_backups";
 
@@ -316,6 +339,19 @@ const SPORT_META={
 };
 const DEFAULT_MET=5.0;
 
+/* Intensity buckets (v36).
+   Strava gives one average_heartrate per activity, not a zone histogram, so a
+   session is classified by its average and weighted by its duration. This is a
+   proxy, not a true time-in-zone figure: an interval session averaging 150 lands
+   in "moderate" even though it contained hard work. It is still the right
+   metric for the question that matters — whether easy sessions are actually
+   easy — because a genuinely easy session has a genuinely low average.
+   Defaults match Garmin zone floors: Z3 starts at 141, Z4 at 161. */
+const HR_EASY_MAX_DEFAULT=140;
+const HR_HARD_MIN_DEFAULT=161;
+const EASY_TARGET_PCT=80;          // the 80/20 reference line
+const TRAIL_WEEKS=6;               // trailing window for rate + intensity metrics
+
 const BIKE_TYPES=new Set(["Ride","VirtualRide","EBikeRide","GravelRide","MountainBikeRide"]);
 const RUN_TYPES =new Set(["Run","TrailRun","VirtualRun"]);
 const SWIM_TYPES=new Set(["Swim"]);
@@ -340,7 +376,24 @@ let _pendingRender=false;        // a re-render deferred because the user is typ
 let _roWarned=false;             // read-only warning already shown
 
 function blankState(){
-  return { version:SCHEMA_VERSION, savedAt:null, settings:{ weightKg:75 }, weeks:{} };
+  return {
+    version:SCHEMA_VERSION, savedAt:null,
+    settings:{ weightKg:75, hrEasyMax:HR_EASY_MAX_DEFAULT, hrHardMin:HR_HARD_MIN_DEFAULT },
+    weeks:{}
+  };
+}
+/* Reading the thresholds through accessors means a v35 document with no
+   hr settings, or a corrupt value, can never produce NaN comparisons —
+   which would silently classify every session as "no HR data". */
+function hrEasyMax(){
+  const v=Number(state.settings&&state.settings.hrEasyMax);
+  return (isFinite(v)&&v>=80&&v<=200)?v:HR_EASY_MAX_DEFAULT;
+}
+function hrHardMin(){
+  const v=Number(state.settings&&state.settings.hrHardMin);
+  const easy=hrEasyMax();
+  // Must sit strictly above the easy ceiling or the moderate band inverts.
+  return (isFinite(v)&&v>easy&&v<=230)?v:Math.max(easy+1,HR_HARD_MIN_DEFAULT);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -517,6 +570,13 @@ function normState(raw){
   if(raw.settings&&typeof raw.settings==="object"){
     const w=Number(raw.settings.weightKg);
     s.settings.weightKg = (isFinite(w)&&w>25&&w<250) ? w : 75;
+    // v36: absent on every v35 document, so fall back rather than reject.
+    const e=Number(raw.settings.hrEasyMax);
+    s.settings.hrEasyMax = (isFinite(e)&&e>=80&&e<=200) ? Math.round(e) : HR_EASY_MAX_DEFAULT;
+    const h=Number(raw.settings.hrHardMin);
+    s.settings.hrHardMin = (isFinite(h)&&h>s.settings.hrEasyMax&&h<=230)
+      ? Math.round(h)
+      : Math.max(s.settings.hrEasyMax+1,HR_HARD_MIN_DEFAULT);
   }
   s.savedAt = typeof raw.savedAt==="string" ? raw.savedAt : null;
   const src=(raw.weeks&&typeof raw.weeks==="object")?raw.weeks:{};
@@ -980,13 +1040,31 @@ function actsBetween(start,end){
  * Aggregate a set of activities. The single source of truth for every number
  * shown anywhere in the app.
  */
+/**
+ * Split parts into whole percentages that total exactly 100, giving the leftover
+ * units to the largest fractional remainders. Never returns a negative.
+ */
+function sharesTo100(parts,total){
+  if(!(total>0)) return parts.map(()=>0);
+  const raw=parts.map(p=>(p/total)*100);
+  const floor=raw.map(Math.floor);
+  let left=100-floor.reduce((a,b)=>a+b,0);
+  const order=raw.map((v,i)=>({i,frac:v-Math.floor(v)}))
+                 .sort((a,b)=>b.frac-a.frac);
+  const out=floor.slice();
+  for(let k=0;k<order.length&&left>0;k++,left--) out[order[k].i]++;
+  return out;
+}
 function computeTotals(acts){
   const t={
     count:acts.length, secs:0, kcal:0, kcalEstimated:0,
     bikeM:0, runM:0, swimM:0,
     runSec:0, swimSec:0,
-    bikeWattSum:0, bikeWattN:0, hrSum:0, hrN:0
+    bikeWattSum:0, bikeWattN:0, hrWSum:0, hrN:0,
+    // v36 intensity: seconds bucketed by the session's average HR
+    easySec:0, modSec:0, hardSec:0
   };
+  const eMax=hrEasyMax(), hMin=hrHardMin();
   acts.forEach(a=>{
     const st=sportOf(a);
     const secs=durationSecs(a);
@@ -1003,7 +1081,13 @@ function computeTotals(acts){
     }
     if(RUN_TYPES.has(st)){ t.runM+=dist; t.runSec+=secs; }
     if(SWIM_TYPES.has(st)&&dist>0){ t.swimM+=dist; t.swimSec+=secs; }
-    if(a.average_heartrate>0){ t.hrSum+=a.average_heartrate; t.hrN++; }
+    if(a.average_heartrate>0){
+      const hr=a.average_heartrate;
+      t.hrWSum+=hr*secs; t.hrN++;
+      if(hr<=eMax)      t.easySec+=secs;
+      else if(hr>=hMin) t.hardSec+=secs;
+      else              t.modSec+=secs;
+    }
   });
   t.hrs=t.secs/3600;
   t.bikeKm=t.bikeM/1000;
@@ -1011,8 +1095,24 @@ function computeTotals(acts){
   t.runPace=t.runM>0?fmtPace(t.runM,t.runSec):"—";
   t.swimPace=t.swimM>0?fmtPaceSwim(t.swimM,t.swimSec):"—";
   t.avgPower=t.bikeWattN>0?Math.round(t.bikeWattSum/t.bikeWattN):0;
-  t.avgHr=t.hrN>0?Math.round(t.hrSum/t.hrN):0;
+  // Weighted by duration, not a mean of means — see hrWSum above.
+  t.hrSecs=t.easySec+t.modSec+t.hardSec;
+  t.avgHr=t.hrSecs>0?Math.round(t.hrWSum/t.hrSecs):0;
   t.kcalIsEstimate=t.kcal>0&&(t.kcalEstimated/t.kcal)>0.35;
+  // Percentages are taken over MEASURED time only. Including unmonitored
+  // sessions in the denominator would quietly deflate every share and make
+  // the easy figure look worse the more strength work you did without a strap.
+  if(t.hrSecs>0){
+    // Largest-remainder allocation. Rounding each share independently can total
+    // 101, and simply deriving the third as 100-a-b then yields a NEGATIVE share
+    // (99s easy / 101s moderate / 0 hard rounds to 50 / 51 / -1). This gives
+    // three non-negative integers that always total exactly 100.
+    const pcts=sharesTo100([t.easySec,t.modSec,t.hardSec],t.hrSecs);
+    t.easyPct=pcts[0]; t.modPct=pcts[1]; t.hardPct=pcts[2];
+  }else{
+    t.easyPct=null; t.modPct=null; t.hardPct=null;
+  }
+  t.hrCoveragePct=t.secs>0?clamp(Math.round(t.hrSecs/t.secs*100),0,100):null;
   return t;
 }
 function totalsForWeek(iso){
@@ -1045,24 +1145,25 @@ function totalsForMonth(mk){
  *  hours exercised up to that day of the week for the last four weeks"
  */
 function dayAlignedComparison(weeksBack=4){
-  const now=new Date();
-  const mon=mondayOf(now);
-  // Calendar-day arithmetic, not ms division: a DST transition inside the week
-  // would otherwise shift the cutoff by a day twice a year.
-  const today=new Date(now); today.setHours(0,0,0,0);
-  const elapsedDays=Math.round((today-mon)/86400000)+1;  // 1..7, today inclusive
-  const cutoff=clamp(elapsedDays,1,7);
+  const mon=mondayOf(new Date());
+  const cutoff=elapsedWeekDays();
 
-  const cur=computeTotals(actsBetween(mon,addDays(mon,cutoff)));
+  const cur=weekToDateTotals();
   const prior=[];
   for(let i=1;i<=weeksBack;i++){
     const m=addDays(mon,-7*i);
     prior.push(computeTotals(actsBetween(m,addDays(m,cutoff))));
   }
   const avg=k=>prior.length?prior.reduce((s,t)=>s+(t[k]||0),0)/prior.length:0;
+  // Easy share must be averaged across the weeks that actually HAVE HR data,
+  // otherwise a strap-free week drags the baseline toward zero.
+  const avgEasy=()=>{
+    const v=prior.filter(t=>t.easyPct!=null).map(t=>t.easyPct);
+    return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;
+  };
   return {
     cur,
-    avg:{ hrs:avg("hrs"), kcal:avg("kcal") },
+    avg:{ hrs:avg("hrs"), kcal:avg("kcal"), easyPct:avgEasy() },
     dayName: DAYS[clamp(cutoff-1,0,6)]
   };
 }
@@ -1070,6 +1171,23 @@ function dayAlignedComparison(weeksBack=4){
 function trailingTotals(weeks=6){
   const mon=mondayOf(new Date());
   return computeTotals(actsBetween(addDays(mon,-7*weeks),mon));
+}
+/** Days elapsed in the current week, today inclusive (1..7). */
+function elapsedWeekDays(){
+  const now=new Date();
+  const today=new Date(now); today.setHours(0,0,0,0);
+  // Calendar-day arithmetic, not ms division — a DST shift would move this by a
+  // day twice a year.
+  return clamp(Math.round((today-mondayOf(now))/86400000)+1,1,7);
+}
+/**
+ * This week UP TO TODAY. The dashboard says "this week so far", so every
+ * "this week" number on it must use the same partial window — otherwise the
+ * trend card and the intensity panel disagree while wearing the same label.
+ */
+function weekToDateTotals(){
+  const mon=mondayOf(new Date());
+  return computeTotals(actsBetween(mon,addDays(mon,elapsedWeekDays())));
 }
 
 /* ── plan adherence (your Q3: planned sessions ticked off) ── */
@@ -1145,13 +1263,6 @@ function currentAndNext(){
   const next=isoOf(addDays(dateFromISO(cur),7));
   return [cur,next];
 }
-/** Rolling timeline window around today. */
-function timelineWeeks(back=8,fwd=5){
-  const mon=mondayOf(new Date());
-  const out=[];
-  for(let i=-back;i<=fwd;i++) out.push(isoOf(addDays(mon,i*7)));
-  return out;
-}
 function monthsWithData(){
   const set=new Set(sortedWeekKeys().map(monthKeyOf));
   set.add(monthKeyOf(thisMondayISO()));
@@ -1204,8 +1315,8 @@ function renderHome(){
   v.appendChild(buildTrendCards());
   v.appendChild(buildProgressPanel(curWeek,curISO));
 
-  v.appendChild(el("div","sec-head","Timeline"));
-  v.appendChild(buildTimeline(timelineWeeks(),curISO));
+  v.appendChild(el("div","sec-head","Intensity"));
+  v.appendChild(buildIntensityPanel(curISO));
 
   v.appendChild(el("div","sec-head","This week & next"));
   v.appendChild(buildWeekCards([curISO,nextISO]));
@@ -1279,7 +1390,114 @@ function buildTrendCards(){
     wrap.appendChild(card("Bike power",c?c+"W":"—",
       `this week · 6-wk avg <b>${t?t+"W":"—"}</b>`,dir(c,t,true)));
   }
+  // 6. Easy share (v36) — the share of measured time spent genuinely easy.
+  {
+    const c=cmp.cur.easyPct, base=cmp.avg.easyPct, t=trail.easyPct;
+    // Colour against the 80% target, not against last month. Drifting from
+    // 30% to 35% is not "up" in any sense that matters.
+    let cls="neutral";
+    if(c!=null) cls = c>=EASY_TARGET_PCT ? "up" : (c<60?"down":"neutral");
+    const parts=[`of measured time · target <b>${EASY_TARGET_PCT}%</b>`];
+    if(t!=null) parts.push(`6-wk <b>${t}%</b>`);
+    else if(base!=null) parts.push(`4-wk <b>${base}%</b>`);
+    wrap.appendChild(card("Easy share",c!=null?c+"%":"—",parts.join(" · "),cls));
+  }
   return wrap;
+}
+
+/**
+ * Intensity distribution (v36) — this week and the trailing 6 weeks, with the
+ * 80/20 reference. Answers the one question a weekly hours figure cannot:
+ * is the easy work actually easy?
+ */
+function buildIntensityPanel(iso){
+  const p=el("div","panel");
+  p.appendChild(Object.assign(el("h3"),{textContent:"Intensity distribution"}));
+
+  if(!allActivities.length){
+    p.appendChild(el("div","muted","Connect Strava to see intensity data."));
+    return p;
+  }
+
+  const bar=(t,label)=>{
+    const box=el("div");
+    const head=el("div","int-target");
+    if(t.easyPct==null){
+      head.textContent=label+" — no heart-rate data";
+      box.appendChild(head);
+      return box;
+    }
+    head.innerHTML=`<b>${esc(label)}</b> · ${fmtHrs(t.hrSecs/3600)} measured`+
+      (t.hrCoveragePct!=null&&t.hrCoveragePct<100
+        ? ` · ${t.hrCoveragePct}% of session time had a strap` : "");
+    box.appendChild(head);
+
+    const b=el("div","int-bar");
+    [["easy",t.easyPct,"int-easy"],["mod",t.modPct,"int-mod"],["hard",t.hardPct,"int-hard"]]
+      .forEach(([k,pct,cls])=>{
+        if(!pct) return;                        // 0% segments would render as slivers
+        const seg=el("div","int-seg "+cls,pct>=8?pct+"%":"");
+        seg.style.width=pct+"%";
+        seg.title=k+": "+pct+"%";
+        b.appendChild(seg);
+      });
+    box.appendChild(b);
+    return box;
+  };
+
+  // Same partial-week window as the trend cards above, so the two agree.
+  const trail=trailingTotals(TRAIL_WEEKS);
+  p.appendChild(bar(weekToDateTotals(),"This week so far"));
+  p.appendChild(bar(trail,`Trailing ${TRAIL_WEEKS} weeks`));
+
+  const lg=el("div","int-legend");
+  const eM=hrEasyMax(), hM=hrHardMin();
+  // hM is guaranteed > eM, but they can be adjacent, which leaves no moderate
+  // band at all — printing "Moderate 141-140" would look like a bug.
+  const modLabel = hM-eM>1 ? `Moderate ${eM+1}\u2013${hM-1}` : "Moderate — none (bands adjacent)";
+  lg.innerHTML=
+    `<div><span class="k" style="background:var(--good)"></span>Easy \u2264${eM} bpm</div>`+
+    `<div><span class="k" style="background:var(--warn)"></span>${modLabel}</div>`+
+    `<div><span class="k" style="background:var(--bad)"></span>Hard \u2265${hM} bpm</div>`;
+  p.appendChild(lg);
+
+  // Per-discipline easy share over the same trailing window — a single overall
+  // figure hides the problem, because one sport can be fine while another is
+  // entirely in the red.
+  const mon=mondayOf(new Date());
+  const trailActs=actsBetween(addDays(mon,-7*TRAIL_WEEKS),mon);
+  const rows=[];
+  [["run",RUN_TYPES],["bike",BIKE_TYPES],["swim",SWIM_TYPES]].forEach(([d,types])=>{
+    const t=computeTotals(trailActs.filter(a=>types.has(sportOf(a))));
+    if(t.easyPct!=null) rows.push([DISC[d].label,t.easyPct,t.hrSecs/3600]);
+  });
+  if(rows.length){
+    const tb=el("table","dtable");
+    tb.innerHTML=`<thead><tr><th>${TRAIL_WEEKS}-wk by sport</th><th>Easy</th><th>Hours w/ HR</th></tr></thead>`;
+    const body=el("tbody");
+    rows.forEach(([l,pct,hrs])=>{
+      const tr=el("tr");
+      const col=pct>=EASY_TARGET_PCT?"var(--good)":(pct<40?"var(--bad)":"var(--warn)");
+      tr.innerHTML=`<td>${esc(l)}</td>`+
+        `<td style="color:${col};font-weight:700">${pct}%</td>`+
+        `<td>${fmtHrs(hrs)}</td>`;
+      body.appendChild(tr);
+    });
+    tb.appendChild(body); p.appendChild(tb);
+  }
+
+  const note=el("div","int-note");
+  note.textContent=
+    "How this is measured: Strava reports one average heart rate per activity, not a "+
+    "zone histogram, so each session is classified by its average and the whole session "+
+    "counts toward that bucket. This reads HARSHER than a true time-in-zone figure — a "+
+    "run averaging 165 counts as fully hard here, while a watch would credit the "+
+    "warm-up and cool-down minutes as easy. Do not compare these percentages to the "+
+    "ones in Garmin; compare them to last month's. The metric still answers the "+
+    "question it exists for, because a genuinely easy session has a genuinely low "+
+    "average and will land in the easy bucket. Thresholds are editable from the header.";
+  p.appendChild(note);
+  return p;
 }
 
 /** Progress against this week's plan. */
@@ -1356,6 +1574,9 @@ function buildDebriefPanel(week,iso){
   g.appendChild(mini("Run",t.runKm>0?t.runKm.toFixed(1)+"km":"—"));
   g.appendChild(mini("Swim",t.swimM>0?Math.round(t.swimM)+"m":"—"));
   g.appendChild(mini("Sessions",String(t.count)));
+  g.appendChild(mini("Avg HR",t.avgHr?t.avgHr+" bpm":"—"));
+  g.appendChild(mini("Easy share",t.easyPct!=null?t.easyPct+"%":"—",
+    t.easyPct==null?null:(t.easyPct>=EASY_TARGET_PCT?"var(--good)":(t.easyPct<40?"var(--bad)":"var(--warn)"))));
   if(h.anyRecorded){
     g.appendChild(mini("Cigarettes",String(h.cigs),h.cigs===0?"var(--good)":(h.cigs>20?"var(--bad)":"var(--warn)")));
     g.appendChild(mini("Drinks",String(h.drinks)));
@@ -1384,7 +1605,8 @@ function buildRollingTable(n){
   const p=el("div","panel");
   p.appendChild(Object.assign(el("h3"),{textContent:`Last ${n} weeks`}));
   const tb=el("table","dtable");
-  tb.innerHTML="<thead><tr><th>Week</th><th>Adher.</th><th>Hours</th><th>Kcal</th><th>Bike km</th><th>Run km</th><th>Swim m</th></tr></thead>";
+  tb.innerHTML="<thead><tr><th>Week</th><th>Adher.</th><th>Hours</th><th>Kcal</th>"+
+    "<th>Bike km</th><th>Run km</th><th>Swim m</th><th>Avg HR</th><th>Easy</th></tr></thead>";
   const body=el("tbody");
   const mon=mondayOf(new Date());
   let sH=0,sC=0,sB=0,sR=0,sS=0;
@@ -1401,35 +1623,24 @@ function buildRollingTable(n){
       `<td>${t.kcal?Math.round(t.kcal).toLocaleString():"—"}</td>`+
       `<td>${t.bikeKm>0?t.bikeKm.toFixed(0):"—"}</td>`+
       `<td>${t.runKm>0?t.runKm.toFixed(1):"—"}</td>`+
-      `<td>${t.swimM>0?Math.round(t.swimM):"—"}</td>`;
+      `<td>${t.swimM>0?Math.round(t.swimM):"—"}</td>`+
+      `<td>${t.avgHr?t.avgHr:"—"}</td>`+
+      (t.easyPct==null
+        ? `<td>—</td>`
+        : `<td style="color:${t.easyPct>=EASY_TARGET_PCT?"var(--good)":(t.easyPct<40?"var(--bad)":"var(--warn)")}">${t.easyPct}%</td>`);
     body.appendChild(tr);
   }
   const tot=el("tr","total-row");
   tot.innerHTML=`<td>Total</td><td></td><td>${fmtHrs(sH)}</td><td>${Math.round(sC).toLocaleString()}</td>`+
-    `<td>${sB.toFixed(0)}</td><td>${sR.toFixed(1)}</td><td>${Math.round(sS)}</td>`;
+    `<td>${sB.toFixed(0)}</td><td>${sR.toFixed(1)}</td><td>${Math.round(sS)}</td>`+
+    `<td></td><td></td>`;
   body.appendChild(tot);
   tb.appendChild(body); p.appendChild(tb);
   return p;
 }
 
-function buildTimeline(isoList,nowISO){
-  const wrap=el("div","timeline-wrap");
-  const tl=el("div","timeline");
-  isoList.forEach(iso=>{
-    const w=getWeek(iso);
-    // Every week looks the same. Only "now" is marked, by outline, not colour.
-    const s=el("div","seg"+(iso===nowISO?" is-now":""));
-    s.style.background="var(--swim)";
-    s.dataset.goto=iso;
-    s.appendChild(el("div","dt",weekLabel(iso)));
-    s.appendChild(el("div","ph",dateFromISO(iso)?String(dateFromISO(iso).getFullYear()):""));
-    tl.appendChild(s);
-  });
-  wrap.appendChild(tl);
-  return wrap;
-}
 
-/* ── MONTH VIEW: breakdown, no timeline, weeks not collapsible (your note #6) ── */
+/* ── MONTH VIEW: breakdown, weeks not collapsible (your note #6) ── */
 function renderMonth(){
   viewMode="month";
   document.getElementById("homeBtn").classList.remove("active");
@@ -1638,6 +1849,14 @@ function weekActivities(iso){
   if(!win) return [];
   return actsBetween(win.start,win.end).sort((a,b)=>actDate(a)-actDate(b));
 }
+/** Which intensity bucket a single activity's average HR falls in (v36). */
+function hrZoneOf(a){
+  const hr=a&&a.average_heartrate;
+  if(!(hr>0)) return null;
+  if(hr<=hrEasyMax()) return {key:"easy",label:"EASY",cls:"z-easy"};
+  if(hr>=hrHardMin()) return {key:"hard",label:"HARD",cls:"z-hard"};
+  return {key:"mod",label:"MOD",cls:"z-mod"};
+}
 function activityCard(a){
   const sport=a.sport_type||a.type||"Workout";
   const card=el("div","act-card");
@@ -1661,7 +1880,17 @@ function activityCard(a){
   if(dist>0) meta.appendChild(stat(fmtDist(dist,sport),"dist"));
   if(time>0) meta.appendChild(stat(fmtTime(time),"time"));
   if(elev>10) meta.appendChild(stat(Math.round(elev)+"m","elev"));
-  if(hr) meta.appendChild(stat(Math.round(hr)+" bpm","HR"));
+  if(hr){
+    const z=hrZoneOf(a);
+    const s=stat(Math.round(hr)+" bpm","HR");
+    if(z){
+      const chip=el("span","zchip "+z.cls,z.label);
+      chip.title="Average HR "+Math.round(hr)+" bpm · easy \u2264"+hrEasyMax()+
+                 ", hard \u2265"+hrHardMin();
+      s.appendChild(chip);
+    }
+    meta.appendChild(s);
+  }
   if(cal.kcal>0) meta.appendChild(stat(cal.kcal+" kcal",cal.est?"est":"cal",cal.est));
   if(RUN_TYPES.has(sport)&&dist>0&&time>0) meta.appendChild(stat(fmtPace(dist,time)+"/km","pace"));
   if(SWIM_TYPES.has(sport)&&dist>0&&time>0) meta.appendChild(stat(fmtPaceSwim(dist,time)+"/100m","pace"));
@@ -1711,21 +1940,6 @@ function closeMenu(){
   document.getElementById("monMenu").classList.remove("show");
   document.getElementById("monBtn").classList.remove("open");
 }
-function navigateToWeek(iso){
-  const mk=monthKeyOf(iso);
-  if(!state.weeks[iso]){ ensureWeek(iso); schedule(); }   // clicking an empty slot creates it
-  if(viewMode!=="month"||currentMonth!==mk){
-    goMonth(mk);
-  }
-  requestAnimationFrame(()=>setTimeout(()=>{
-    const t=document.querySelector(`[data-week="${iso}"]`);
-    if(t){
-      t.scrollIntoView({behavior:"smooth",block:"start"});
-      t.style.outline="2px solid var(--swim)"; t.style.outlineOffset="3px";
-      setTimeout(()=>{t.style.outline="";t.style.outlineOffset="";},1800);
-    }
-  },90));
-}
 
 /* ════════════════════════════════════════════════════════════
    EVENTS
@@ -1744,12 +1958,10 @@ document.addEventListener("click",e=>{
   if(!e.target.closest(".mon-wrap")) closeMenu();
 });
 
-/* month option / timeline segment */
+/* month option */
 document.addEventListener("click",e=>{
   const mo=e.target.closest("[data-month]");
-  if(mo&&mo.classList.contains("mon-opt")){ goMonth(mo.dataset.month); return; }
-  const seg=e.target.closest("[data-goto]");
-  if(seg){ navigateToWeek(seg.dataset.goto); return; }
+  if(mo&&mo.classList.contains("mon-opt")){ goMonth(mo.dataset.month); }
 });
 
 /* week actions */
@@ -1838,13 +2050,19 @@ document.addEventListener("input",e=>{
    EXPORT — everything in one file (your Q5)
    ════════════════════════════════════════════════════════════ */
 function updateExportBtn(){
-  const b=document.getElementById("exportBtn"); if(!b) return;
-  // Always available — the plan, habits and comments are worth exporting even
-  // with no Strava connection.
-  b.textContent=allActivities.length
-    ? "↓ Export JSON · "+allActivities.length+" activities"
-    : "↓ Export JSON";
-  b.style.display="block";
+  const b=document.getElementById("exportBtn");
+  if(b){
+    // Always available — the plan, habits and comments are worth exporting even
+    // with no Strava connection.
+    b.textContent=allActivities.length
+      ? "↓ Export JSON · "+allActivities.length+" activities"
+      : "↓ Export JSON";
+    b.style.display="block";
+  }
+  // .export-btn is display:none in CSS and only revealed here. Import must be
+  // revealed by the same call or the button exists but is never visible.
+  const i=document.getElementById("importBtn");
+  if(i) i.style.display=_loadOk?"block":"none";   // hidden outright when writes are blocked
 }
 function exportJSON(){
   const weeks=state.weeks;
@@ -1883,6 +2101,95 @@ function exportJSON(){
 document.getElementById("exportBtn").addEventListener("click",exportJSON);
 
 /* ════════════════════════════════════════════════════════════
+   IMPORT (v36) — merge a plan file into state.weeks
+   Accepts a bare weeks map {"2026-08-17":{...}}, a full export payload
+   ({state:{weeks:{...}}}), or a loose {weeks:{...}}.
+
+   Deliberately narrow: for a week that already exists this replaces `planned`
+   and NOTHING else. Comments and habit entries are yours, written by hand, and
+   a plan file has no business touching them — so importing the wrong file
+   costs you a plan, never your notes.
+   ════════════════════════════════════════════════════════════ */
+function extractWeeksMap(raw){
+  const cand = (raw&&raw.state&&raw.state.weeks) ? raw.state.weeks
+             : (raw&&raw.weeks)                  ? raw.weeks
+             : raw;
+  if(!cand||typeof cand!=="object"||Array.isArray(cand)) return null;
+  const keys=Object.keys(cand).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k));
+  return keys.length?{map:cand,keys}:null;
+}
+async function importPlan(file){
+  if(!_loadOk){
+    banner("Editing is disabled this session because your data could not be read. "+
+           "Nothing was imported. Please reload.",true);
+    return;
+  }
+  let raw;
+  try{
+    raw=JSON.parse(await file.text());
+  }catch(e){
+    banner("That file is not valid JSON, so nothing was imported.",true);
+    return;
+  }
+  const found=extractWeeksMap(raw);
+  if(!found){
+    banner("No weeks found. Expected an object keyed by Monday dates "+
+           "(\"YYYY-MM-DD\"), or a full export containing state.weeks.",true);
+    return;
+  }
+
+  let added=0, updated=0, sessions=0, snapped=0, skipped=0, collided=0;
+  const seen=new Set();
+  found.keys.forEach(k=>{
+    const d=dateFromISO(k);
+    if(!d){ skipped++; return; }
+    const iso=isoOf(mondayOf(d));
+    if(iso!==k) snapped++;                      // a non-Monday key gets snapped, as elsewhere
+    // Two keys in the same file can snap to one Monday. normState resolves that
+    // with "first one wins"; import must agree, or which plan you get depends on
+    // key iteration order.
+    if(seen.has(iso)){ collided++; return; }
+    seen.add(iso);
+    // normWeek coerces every field and drops anything unrecognised, so a
+    // malformed file cannot put bad shapes into state.
+    const incoming=normWeek(found.map[k],iso);
+    const existing=state.weeks[iso];
+    if(existing){
+      existing.planned=incoming.planned;        // plan only — see the note above
+      updated++;
+    }else{
+      state.weeks[iso]=incoming;
+      added++;
+    }
+    sessions+=incoming.planned.length;
+  });
+
+  if(!added&&!updated){ banner("Nothing in that file could be read as a week.",true); return; }
+
+  const saved=await persist(true);
+  const bits=[`Imported ${sessions} session${sessions===1?"":"s"} across `+
+              `${added+updated} week${added+updated===1?"":"s"} `+
+              `(${added} new, ${updated} updated).`,
+              "Comments and habits untouched."];
+  if(snapped)  bits.push(`${snapped} key${snapped===1?"":"s"} snapped to its Monday.`);
+  if(collided) bits.push(`${collided} duplicate week${collided===1?"":"s"} ignored (first wins).`);
+  if(skipped)  bits.push(`${skipped} unreadable date${skipped===1?"":"s"} skipped.`);
+  if(!saved)  bits.push("NOT SAVED to the cloud — kept locally, see the console.");
+  banner(bits.join(" "),!saved);
+
+  buildMonthMenu();                             // new months may now exist
+  renderSafe();                                 // never yank the DOM from a caret
+}
+document.getElementById("importBtn").addEventListener("click",()=>{
+  document.getElementById("importFile").click();
+});
+document.getElementById("importFile").addEventListener("change",e=>{
+  const f=e.target.files&&e.target.files[0];
+  e.target.value="";                            // so re-picking the same file fires again
+  if(f) importPlan(f);
+});
+
+/* ════════════════════════════════════════════════════════════
    AUTH & BOOT
    ════════════════════════════════════════════════════════════ */
 document.getElementById("signInBtn").addEventListener("click",()=>{
@@ -1906,6 +2213,26 @@ document.getElementById("weightBtn").addEventListener("click",()=>{
   if(!isFinite(n)||n<=25||n>=250){ flash("Enter a weight between 25 and 250 kg",true); return; }
   state.settings.weightKg=Math.round(n*10)/10;
   updateWeightBtn(); schedule(); render();
+});
+
+/* Heart-rate thresholds — drive the easy / moderate / hard split. */
+function updateHrBtn(){
+  const b=document.getElementById("hrBtn"); if(!b) return;
+  b.textContent="HR "+hrEasyMax()+"/"+hrHardMin();
+}
+document.getElementById("hrBtn").addEventListener("click",()=>{
+  const e0=hrEasyMax(), h0=hrHardMin();
+  const e=prompt("Easy ceiling in bpm — sessions averaging at or below this count as easy:",String(e0));
+  if(e==null) return;
+  const en=Math.round(Number(String(e).replace(",",".")));
+  if(!isFinite(en)||en<80||en>200){ flash("Enter an easy ceiling between 80 and 200 bpm",true); return; }
+  const h=prompt("Hard floor in bpm — sessions averaging at or above this count as hard:",String(Math.max(h0,en+1)));
+  if(h==null) return;
+  const hn=Math.round(Number(String(h).replace(",",".")));
+  if(!isFinite(hn)||hn<=en||hn>230){ flash("Hard floor must be above the easy ceiling and at most 230 bpm",true); return; }
+  state.settings.hrEasyMax=en;
+  state.settings.hrHardMin=hn;
+  updateHrBtn(); schedule(); render();
 });
 
 window.addEventListener("beforeunload",()=>{
@@ -1936,6 +2263,7 @@ onAuthStateChanged(_auth,async user=>{
   currentMonth=monthKeyOf(thisMondayISO());
   document.getElementById("monLabel").textContent=monthLabel(currentMonth);
   updateWeightBtn();
+  updateHrBtn();
   updateExportBtn();          // export must work without Strava
   buildMonthMenu();
   renderHome();
