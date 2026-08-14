@@ -2,30 +2,6 @@
 <!-- v36 -->
 <!--
   Training Log — Stefano
-  ─────────────────────────────────────────────────────────────
-  v36. Changes from v35:
-   · IMPORT: load a plan file (a bare weeks map or a full export payload) and
-     merge it in. Replaces `planned` only — comments and habits are never
-     touched, so importing the wrong file cannot cost you your notes.
-   · INTENSITY: average heart rate per activity is bucketed into easy /
-     moderate / hard and surfaced three ways — a trend card, a distribution
-     panel with an 80/20 reference, and a per-activity chip. Thresholds live
-     in settings and are editable from the header.
-   · Timeline section removed.
-   · Schema 35 -> 36. Additive only: settings.hrEasyMax / settings.hrHardMin.
-     The Firestore document is deliberately STILL traininglog/state3 — v36
-     reads every v35 document unchanged, so there is nothing to migrate and
-     no risk of orphaning data behind a new document name.
-
-  v35 structural changes, still in force:
-   · NO personal data in this file. Firestore is the sole source of truth.
-   · Weeks keyed by ISO Monday date. Quarters removed entirely.
-   · Months/years are derived views, never stored.
-   · Real Strava calories via cached per-activity detail fetch.
-   · Day-aligned week-over-week comparisons.
-   · Write-guards: never persists unless a load succeeded.
-   · Migrates traininglog/state2 -> traininglog/state3 once, non-destructively.
-  ─────────────────────────────────────────────────────────────
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1428,7 +1404,7 @@ function buildIntensityPanel(iso){
     }
     head.innerHTML=`<b>${esc(label)}</b> · ${fmtHrs(t.hrSecs/3600)} measured`+
       (t.hrCoveragePct!=null&&t.hrCoveragePct<100
-        ? ` · ${t.hrCoveragePct}% of session time had a strap` : "");
+        ? ` · heart rate recorded for ${t.hrCoveragePct}% of it` : "");
     box.appendChild(head);
 
     const b=el("div","int-bar");
