@@ -1,8 +1,41 @@
 <!doctype html>
-<!-- v37 -->
+<!-- v38 -->
 <!--
   Training Log — Stefano
   ─────────────────────────────────────────────────────────────
+  v38. Progress view only. Home and Month are untouched, and the state schema
+  is unchanged (still 37, still traininglog/state3) — nothing to migrate.
+
+   · CHART replaces SPARKLINE. Padded y-domains, bounded metrics plotted on
+     their real 0–100 scale, bars for sums and lines for levels, a fitted
+     trend, and the daily min–max behind each point. Four defects fixed:
+     an unpadded domain that made an 8% move and a 160% move draw the same
+     mountain range; gap-isolated points emitting a bare moveto and so not
+     stroking at all; a <circle> end-dot that preserveAspectRatio="none"
+     rendered as an oval — now gone entirely, the big number above it already
+     says the last value; and sums drawn as continuous lines.
+   · BUCKET WIDTH. A month is 28 or 35 days depending on how its Mondays fall,
+     so every sum carried a ±25% sawtooth that was pure calendar. Sums are now
+     normalised by the bucket's own width — per day for daily-life metrics,
+     per week for training volume. At weekly granularity a /wk rate equals the
+     raw total, so that view is unchanged. Totals remain in the enlarge table.
+   · PARTIAL BUCKETS. The current week or month is drawn faded and labelled,
+     and for stored metrics the rate divides by days that actually have a
+     reading — so a third-finished August no longer reads as a collapse.
+   · CLICK TO ENLARGE. Any card opens a dialog with axes, tick labels, a
+     legend, every plotted number with its underlying total and daily spread,
+     and a note on where the metric comes from.
+   · SANE BOUNDS, applied on READ so an already-imported store is repaired
+     without re-importing. Garmin writes 511 into hrvWeeklyAverage before the
+     7-day baseline exists; that single value was setting the axis maximum and
+     crushing the real 43–62 range into the bottom 4% of the card.
+   · READINESS was reading a post-midnight carry-over instead of the wake-up
+     record — wrong on 23 of 144 days, by 20 points on average, 54 at worst.
+     Now selects on inputContext. REQUIRES A RE-IMPORT of the Garmin zip.
+   · DELTA is the mean of the outer thirds, not first-bucket vs last-bucket, so
+     one noisy week no longer flips both the number and its colour. Its label
+     counts elapsed buckets rather than readings.
+
   v37. Changes from v36:
    · PROGRESS view — a third view for trends over 3/6/12 months or all time,
      at weekly or monthly granularity.
@@ -148,13 +181,49 @@ body{background:var(--bg);background-image:linear-gradient(var(--grid) 1px,trans
 .ctl-lbl{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;
   letter-spacing:.14em;color:var(--ink-soft)}
 .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:10px;margin-bottom:6px}
-.mcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+.mcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;
+  cursor:pointer;transition:border-color .15s,box-shadow .15s;position:relative}
+.mcard:hover,.mcard:focus-visible{border-color:var(--line-strong);box-shadow:var(--shadow);outline:none}
+.mcard:hover .mk-x,.mcard:focus-visible .mk-x{opacity:1}
+.mcard .mk-x{position:absolute;top:9px;right:10px;font-family:"JetBrains Mono",monospace;font-size:11px;
+  color:var(--ink-soft);opacity:0;transition:opacity .15s;pointer-events:none}
 .mcard .mk-l{font-family:"JetBrains Mono",monospace;font-size:9.5px;text-transform:uppercase;
-  letter-spacing:.1em;color:var(--ink-soft);display:flex;align-items:center;gap:5px}
+  letter-spacing:.1em;color:var(--ink-soft);display:flex;align-items:center;gap:5px;padding-right:15px}
 .mcard .mk-v{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:21px;line-height:1.1;margin-top:4px}
+.mcard .mk-u{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:400;color:var(--ink-soft);margin-left:3px}
 .mcard .mk-d{font-family:"JetBrains Mono",monospace;font-size:10px;margin-top:2px}
 .mcard .mk-d.up{color:var(--good)}.mcard .mk-d.down{color:var(--bad)}.mcard .mk-d.neutral{color:var(--ink-soft)}
 .mcard svg{display:block;width:100%;height:34px;margin-top:7px;overflow:visible}
+/* -- v38 enlarge dialog -- */
+dialog.mdlg{border:none;border-radius:16px;padding:0;max-width:min(940px,94vw);width:100%;
+  background:var(--card);color:var(--ink);box-shadow:0 24px 60px rgba(0,0,0,.28)}
+dialog.mdlg::backdrop{background:rgba(21,25,31,.42)}
+.mdlg-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  padding:18px 20px 13px;border-bottom:1px solid var(--line)}
+.mdlg-ttl{font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:19px;letter-spacing:-.01em;
+  display:flex;align-items:center;gap:7px}
+.mdlg-sub{font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--ink-soft);margin-top:5px;line-height:1.6}
+.mdlg-x{background:none;border:1px solid var(--line);border-radius:8px;cursor:pointer;
+  font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--ink-soft);width:30px;height:30px;flex:none}
+.mdlg-x:hover{border-color:var(--line-strong);color:var(--ink)}
+.mdlg-bd{padding:14px 20px 18px}
+.mdlg-bd svg{display:block;width:100%;height:auto}
+.mdlg-legend{display:flex;flex-wrap:wrap;gap:15px;font-family:"JetBrains Mono",monospace;
+  font-size:10px;color:var(--ink-soft);margin:10px 0 14px}
+.mdlg-legend span{display:flex;align-items:center;gap:5px}
+.mdlg-key{width:15px;height:3px;flex:none;border-radius:2px}
+.mdlg-note{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--ink-soft);
+  line-height:1.7;border-top:1px solid var(--line);padding-top:11px;margin-top:13px}
+.mdlg-tbl{max-height:224px;overflow:auto;border:1px solid var(--line);border-radius:9px}
+.mdlg-tbl table{width:100%;border-collapse:collapse;font-family:"JetBrains Mono",monospace;font-size:11px}
+.mdlg-tbl th{position:sticky;top:0;background:var(--card);text-align:right;font-size:9.5px;
+  text-transform:uppercase;letter-spacing:.09em;color:var(--ink-soft);font-weight:500;
+  padding:6px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+.mdlg-tbl th:first-child{text-align:left}
+.mdlg-tbl td{text-align:right;padding:5px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+.mdlg-tbl td:first-child{text-align:left}
+.mdlg-tbl tr.part td{color:var(--ink-soft);font-style:italic}
+.mdlg-tbl tr:last-child td{border-bottom:none}
 .src-dot{width:6px;height:6px;border-radius:50%;flex:none}
 .cov-bar{height:5px;border-radius:999px;background:#EDF0F3;overflow:hidden;min-width:44px}
 .cov-fill{height:100%;border-radius:999px}
@@ -526,6 +595,76 @@ const METRICS={
 };
 const METRIC_KEYS=Object.keys(METRICS);
 
+/* ════════════════════════════════════════════════════════════
+   CHART HINTS (v38)
+   Deliberately a side table rather than more columns in METRICS: these describe
+   how a number should be DRAWN, not what it means, and the registry stays
+   readable without them.
+
+   rate    A bucket is 28 or 35 days depending on how the weeks fall, so a raw
+           SUM carries a built-in +-25% sawtooth that has nothing to do with
+           training. Every sum is therefore normalised by the bucket's own
+           width. 'day' where a daily figure reads naturally (steps/day),
+           'week' where it does not (hours/wk, not 0.9 h/day). At weekly
+           granularity a /wk rate equals the raw total, so nothing changes.
+   bar     Accumulations are bars; levels are lines. A sum is a quantity that
+           piles up inside the bucket; a level is a state that merely happens
+           to be sampled there. Drawing both as lines implied a continuity the
+           sums never had.
+   domain  Bounded scales, plotted on their real range instead of autoscaled.
+           A readiness series that moved 62->68 should look like a 6-point move
+           on a 0-100 axis, not like a mountain range.
+   sane    Physiologically impossible values, rejected on READ so that data
+           already in the store is repaired without a re-import. Garmin writes
+           511 (0x1FF, its "no data" marker) into hrvWeeklyAverage before the
+           7-day baseline exists; a single 511 sets the y-axis maximum and
+           crushes the real 43-62 range into the bottom 4% of the card.
+   ════════════════════════════════════════════════════════════ */
+const CHART={
+  rate:{
+    steps:"day", activeKcal:"day", totalKcal:"day", vigorousMin:"day",
+    moderateMin:"day", sweatLossMl:"day",
+    hours:"week", sessions:"week", bikeKm:"week", runKm:"week", swimM:"week",
+    bikeElevM:"week", kcalStrava:"week",
+    cigs:"week", drinks:"week", cigFreeDays:"week",
+    plannedSessions:"week", doneSessions:"week"
+  },
+  domain:{
+    readiness:[0,100], sleepScore:[0,100], stressAvg:[0,100], sleepStress:[0,100],
+    bbCharged:[0,100], bbDrained:[0,100],
+    easyPct:[0,100], modPct:[0,100], hardPct:[0,100], hrCoveragePct:[0,100],
+    runEasyPct:[0,100], bikeEasyPct:[0,100], adherencePct:[0,100]
+  },
+  sane:{
+    hrv:[10,200], hrvWeekly:[10,200], rhr:[25,120], respiration:[4,40],
+    skinTempDelta:[-10,10], sleepH:[0,16], sleepScore:[0,100], sleepStress:[0,100],
+    sleepDeepMin:[0,600], sleepRemMin:[0,600], readiness:[0,100], stressAvg:[0,100],
+    bbCharged:[0,100], bbDrained:[0,100], vo2max:[15,95], vo2maxBike:[15,95],
+    weightKg:[25,250], bmi:[8,70], bioAge:[10,100], acwr:[0,10],
+    pred5kSec:[300,14400], pred10kSec:[600,28800],
+    predHMSec:[1200,43200], predMSec:[2400,86400]
+  }
+};
+/* Bars for anything normalised — i.e. every sum. One source of truth. */
+function isRate(key){ return !!CHART.rate[key]; }
+function rateSuffix(key){
+  const r=CHART.rate[key];
+  return r ? (r==="week"?"/wk":"/day") : "";
+}
+/** Unit shown next to a value, rate suffix included. */
+function unitLabel(key){
+  const m=METRICS[key]||{};
+  const u=m.unit?(m.unit.charAt(0)==="/"?m.unit:" "+m.unit):"";
+  return (u+rateSuffix(key)).trim();
+}
+/** True when a stored daily value is physiologically possible. */
+function saneVal(key,v){
+  const b=CHART.sane[key];
+  if(!b) return true;
+  return typeof v==="number" && isFinite(v) && v>=b[0] && v<=b[1];
+}
+
+
 /* Small helpers the derived metrics lean on. Each returns null rather than 0
    when there is nothing to measure, so an empty bucket breaks the line instead
    of plotting a false zero. */
@@ -580,6 +719,7 @@ let _rateLimited=false;          // Strava budget exhausted or 429 seen
 let _rlTimer=null;               // auto-resume at the next 15-minute boundary
 let _pendingRender=false;        // a re-render deferred because the user is typing
 let _roWarned=false;             // read-only warning already shown
+let _mdlg=null;                  // v38 open enlarge dialog, if any
 let metrics=blankMetrics();      // v37 wellness store — its OWN Firestore doc
 let _metricsLoadOk=false;        // separate write guard from state
 let _derivedMemo=new Map();      // bucket -> derived values, cleared when activities change
@@ -1357,7 +1497,9 @@ function buildBuckets(period,gran){
     while(d<=last&&guard++<520){
       const end=addDays(d,7);
       out.push({key:isoOf(d),label:weekLabel(isoOf(d)),start:new Date(d),end,
-                days:isoRange(d,end),weekISOs:[isoOf(d)],gran:"week"});
+                days:isoRange(d,end),weekISOs:[isoOf(d)],gran:"week",
+                // v38: a bucket knows its own width and whether it has finished.
+                nDays:7,partial:end>addDays(today,1)});
       d=end;
     }
   }else{
@@ -1381,7 +1523,11 @@ function buildBuckets(period,gran){
         days=isoRange(cStart,cEnd); start=cStart; end=cEnd;
       }
       out.push({key:mk,label:MONTH_NAMES[mo].slice(0,3)+" "+String(y).slice(2),
-                start,end,days,weekISOs:wks,gran:"month"});
+                start,end,days,weekISOs:wks,gran:"month",
+                // Month buckets are 28 or 35 days wide depending on how the
+                // Mondays fall. Carrying nDays is what lets every sum be
+                // normalised instead of sawtoothing on the calendar.
+                nDays:days.length,partial:end>addDays(today,1)});
       mo++; if(mo>11){mo=0;y++;}
     }
   }
@@ -1411,7 +1557,10 @@ function storedVals(key,bucket){
     const man=metrics.manual[d]&&metrics.manual[d][key];
     const imp=metrics.days[d]&&metrics.days[d][key];
     const v=(man!==undefined&&man!==null)?man:imp;
-    if(v!==undefined&&v!==null) out.push(v);
+    // v38: filter on read, not on import, so values already in the store are
+    // repaired the moment this file loads. Garmin's 511 sentinel in
+    // hrvWeeklyAverage was otherwise setting the y-axis max for the whole card.
+    if(v!==undefined&&v!==null&&saneVal(key,v)) out.push(v);
   });
   return out;
 }
@@ -1460,11 +1609,85 @@ function metricValue(key,bucket){
 }
 function metricSeries(key,buckets){ return buckets.map(b=>metricValue(key,b)); }
 function hasAnyData(key,buckets){ return metricSeries(key,buckets).some(v=>v!=null); }
+
+/**
+ * How many days (or weeks) a bucket's SUM should be divided by.
+ *
+ * For a stored metric the honest divisor is the number of days that actually
+ * carry a reading — which makes a per-day rate exactly the mean of the dailies,
+ * and makes the part-finished current bucket correct rather than a third of its
+ * true height. For a derived metric there are no dailies (a rest day is a real
+ * zero, not a missing one), so the divisor is elapsed days, capped at today.
+ */
+function rateDiv(key,bucket){
+  const r=CHART.rate[key]; if(!r) return 1;
+  const m=METRICS[key]||{};
+  let d;
+  if(m.src==="garmin"||m.src==="manual") d=storedVals(key,bucket).length;
+  else if(m.src==="weeks")               d=weeksVals(key,bucket).length*7;
+  else{
+    const t=new Date(); t.setHours(0,0,0,0);
+    const cap=addDays(t,1);
+    const end=bucket.end<cap?bucket.end:cap;
+    d=Math.round((end-bucket.start)/86400000);
+  }
+  if(!(d>0)) return null;
+  return r==="week" ? d/7 : d;
+}
+/** The series as PLOTTED: sums normalised by bucket width, levels untouched. */
+function chartSeries(key,buckets){
+  return buckets.map(b=>{
+    const v=metricValue(key,b);
+    if(v==null) return null;
+    const d=rateDiv(key,b);
+    if(d==null) return null;
+    return d===1?v:v/d;
+  });
+}
+/**
+ * Within-bucket spread for stored metrics — the daily min and max behind each
+ * plotted point. A weekly mean of 52 bpm hides whether the week ran 50-54 or
+ * 44-63, and that range is the whole story on a recovery metric.
+ */
+function chartBand(key,buckets){
+  const m=METRICS[key]||{};
+  if(isRate(key)||(m.src!=="garmin"&&m.src!=="manual")) return null;
+  let any=false;
+  const band=buckets.map(b=>{
+    const v=storedVals(key,b);
+    if(v.length<2) return null;
+    any=true;
+    return {lo:Math.min.apply(null,v),hi:Math.max.apply(null,v),n:v.length};
+  });
+  return any?band:null;
+}
+/** Least-squares fit over {i,v} points. Null below 4 points — noise, not trend. */
+function lsqFit(pts){
+  const n=pts.length; if(n<4) return null;
+  let si=0,sv=0,sii=0,siv=0;
+  pts.forEach(p=>{si+=p.i;sv+=p.v;sii+=p.i*p.i;siv+=p.i*p.v;});
+  const den=n*sii-si*si; if(!den) return null;
+  const b=(n*siv-si*sv)/den;
+  return {b,a:(sv-b*si)/n};
+}
+/**
+ * Robust change across the window. First-vs-last compared two single buckets,
+ * so one noisy week at either end flipped both the number and its colour.
+ * Averaging the outer thirds is far steadier and still honest about direction.
+ */
+function edgeMeans(pts){
+  if(pts.length<2) return null;
+  const k=Math.max(1,Math.round(pts.length/3));
+  const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+  return {from:mean(pts.slice(0,k).map(p=>p.v)),
+          to:  mean(pts.slice(-k).map(p=>p.v)), k};
+}
 function fmtMetric(key,v){
   if(v==null) return "\u2014";
   const m=METRICS[key];
   const t=(m.fmt?m.fmt(v):String(v));
-  return m.unit?t+(m.unit.charAt(0)==="/"?m.unit:" "+m.unit):t;
+  const u=unitLabel(key);                       // v38: includes any /day or /wk
+  return u?t+(u.charAt(0)==="/"?u:" "+u):t;
 }
 /** Colour a change according to the metric's own direction, not the sign. */
 function deltaClass(key,first,last){
@@ -1721,6 +1944,9 @@ function weeksInMonth(mk){
    RENDER — router
    ════════════════════════════════════════════════════════════ */
 function render(){
+  // A modal sits on <body>, not in #view, so it would survive a re-render and
+  // keep showing the bucket list it captured. Dismiss it instead.
+  if(_mdlg){ try{ _mdlg.close(); }catch(_){ _mdlg.remove(); } _mdlg=null; }
   if(viewMode==="progress") renderProgress();
   else if(viewMode==="month") renderMonth();
   else renderHome();
@@ -1780,91 +2006,376 @@ function buildMonthPicker(mk){
 /* ════════════════════════════════════════════════════════════
    PROGRESS VIEW (v37)
    ════════════════════════════════════════════════════════════ */
-function sparkline(vals,opts){
-  const o=opts||{};
+/* ════════════════════════════════════════════════════════════
+   CHART (v38) — one renderer, two sizes.
+
+   Replaces the v37 sparkline, which had four problems worth naming:
+     · The y-domain ran edge to edge from data min to data max with no padding,
+       so a 5k prediction that moved 8% and an acute load that moved 160% drew
+       the identical mountain range. Shape carried no information.
+     · A gap-isolated point emitted a bare "M x y". A subpath consisting of a
+       single moveto is not stroked (SVG 1.1 §11.4), so those points rendered
+       as nothing at all.
+     · preserveAspectRatio="none" stretched the viewBox across a much wider
+       card. vector-effect rescued the stroke but not the <circle>, so the
+       end-of-line dot drew as an oval. Every dot is now a zero-length path
+       segment with a round cap: perfectly circular at any scale, and it also
+       makes an isolated point visible.
+     · Sums were drawn as continuous lines, implying a continuity they never
+       had, and were never normalised for the 28-vs-35-day bucket width.
+   ════════════════════════════════════════════════════════════ */
+const NS="http://www.w3.org/2000/svg";
+function svgEl(name,attrs){
+  const e=document.createElementNS(NS,name);
+  if(attrs) Object.keys(attrs).forEach(k=>e.setAttribute(k,attrs[k]));
+  return e;
+}
+/** A dot drawn as a zero-length round-capped segment — never distorts. */
+function svgDot(x,y,color,w){
+  return svgEl("path",{d:"M"+x+" "+y+"L"+x+" "+y,stroke:color,"stroke-width":w,
+    "stroke-linecap":"round","vector-effect":"non-scaling-stroke",fill:"none"});
+}
+function niceTicks(lo,hi,n){
+  const span=hi-lo; if(!(span>0)) return [lo];
+  const raw=span/Math.max(1,n);
+  const mag=Math.pow(10,Math.floor(Math.log10(raw)));
+  const step=[1,2,2.5,5,10].map(x=>x*mag).find(x=>x>=raw)||10*mag;
+  const out=[]; let t=Math.ceil(lo/step)*step;
+  for(;t<=hi+1e-9&&out.length<12;t+=step) out.push(t);
+  return out.length?out:[lo,hi];
+}
+
+/**
+ * @param key      metric key
+ * @param buckets  the bucket list the whole view shares
+ * @param big      true for the enlarge dialog: axes, ticks, labels
+ */
+function buildChart(key,buckets,big,color){
+  const m=METRICS[key]||{};
+  const vals=chartSeries(key,buckets);
+  const band=chartBand(key,buckets);
   const pts=vals.map((v,i)=>({i,v})).filter(p=>p.v!=null);
-  const ns="http://www.w3.org/2000/svg";
-  const svg=document.createElementNS(ns,"svg");
-  svg.setAttribute("viewBox","0 0 100 34");
-  svg.setAttribute("preserveAspectRatio","none");
-  svg.setAttribute("role","img");
-  svg.setAttribute("aria-label",o.aria||"trend");
-  if(pts.length<2){
-    const t=document.createElementNS(ns,"text");
-    t.setAttribute("x","0"); t.setAttribute("y","22");
-    t.setAttribute("font-size","9"); t.setAttribute("fill","var(--ink-soft)");
-    t.setAttribute("font-family","JetBrains Mono, monospace");
-    t.textContent=pts.length?"single reading":"no data";
-    svg.appendChild(t); return svg;
+
+  const W=big?880:100, H=big?320:34;
+  const PL=big?64:0.6, PR=big?14:0.6, PT=big?16:3, PB=big?42:3;
+  const svg=svgEl("svg",{viewBox:"0 0 "+W+" "+H,role:"img",
+    "aria-label":(m.label||key)+" trend, "+pts.length+" point"+(pts.length===1?"":"s")});
+  if(!big) svg.setAttribute("preserveAspectRatio","none");
+
+  if(!pts.length){
+    svg.appendChild(Object.assign(svgEl("text",{x:PL,y:big?H/2:22,
+      "font-size":big?13:9,fill:"var(--ink-soft)","font-family":"JetBrains Mono, monospace"}),
+      {textContent:"no data in range"}));
+    return svg;
   }
-  const finite=pts.map(p=>p.v);
-  let lo=Math.min.apply(null,finite), hi=Math.max.apply(null,finite);
-  if(o.target!=null){ lo=Math.min(lo,o.target); hi=Math.max(hi,o.target); }
-  if(hi===lo){ hi=lo+1; lo=lo-1; }
-  const n=vals.length-1||1;
-  const X=i=>(i/n)*100;
-  const Y=v=>32-((v-lo)/(hi-lo))*30;
-  if(o.target!=null){
-    const g=document.createElementNS(ns,"line");
-    g.setAttribute("x1","0"); g.setAttribute("x2","100");
-    g.setAttribute("y1",Y(o.target)); g.setAttribute("y2",Y(o.target));
-    g.setAttribute("stroke","var(--ink-soft)"); g.setAttribute("stroke-width","0.6");
-    g.setAttribute("stroke-dasharray","2.5 2.5"); g.setAttribute("vector-effect","non-scaling-stroke");
-    svg.appendChild(g);
+
+  /* ── domain. A declared domain wins; otherwise pad 8% so a flat series looks
+        flat instead of being stretched to fill the box. ── */
+  const pool=pts.map(p=>p.v);
+  if(band) band.forEach(b=>{ if(b){ pool.push(b.lo,b.hi); } });
+  if(m.target!=null) pool.push(m.target);
+  let lo=Math.min.apply(null,pool), hi=Math.max.apply(null,pool);
+  const dom=CHART.domain[key];
+  if(dom){ lo=Math.min(lo,dom[0]); hi=Math.max(hi,dom[1]); }
+  else if(hi===lo){ const e=Math.abs(lo)*0.05||1; lo-=e; hi+=e; }
+  else{ const pad=(hi-lo)*0.08; lo-=pad; hi+=pad; }
+  // Bars encode magnitude by area, so their baseline must be zero: a truncated
+  // bar axis makes 9,800 look like half of 10,900. Lines encode position and
+  // are free to zoom. If a bar series then looks flat, it genuinely is flat.
+  if(isRate(key)) lo=Math.min(0,lo);
+
+  const n=buckets.length||1;
+  const bw=(W-PL-PR)/n;
+  const X=i=>PL+(i+0.5)*bw;
+  const Y=v=>H-PB-((v-lo)/(hi-lo))*(H-PT-PB);
+  const col=color||metricColor(key,buckets);
+  const bars=isRate(key);
+
+  /* ── axes (big only) ── */
+  if(big){
+    niceTicks(lo,hi,5).forEach(t=>{
+      svg.appendChild(svgEl("line",{x1:PL,x2:W-PR,y1:Y(t),y2:Y(t),
+        stroke:"var(--line)","stroke-width":1}));
+      svg.appendChild(Object.assign(svgEl("text",{x:PL-9,y:Y(t)+4,"text-anchor":"end",
+        "font-size":11,fill:"var(--ink-soft)","font-family":"JetBrains Mono, monospace"}),
+        {textContent:m.fmt?m.fmt(t):String(Math.round(t))}));
+    });
+    svg.appendChild(svgEl("line",{x1:PL,x2:PL,y1:PT,y2:H-PB,stroke:"var(--line-strong)","stroke-width":1}));
+    // Thin the x labels so they never collide, whatever the bucket count.
+    const every=Math.ceil(n/12);
+    buckets.forEach((b,i)=>{
+      if(i%every) return;
+      svg.appendChild(Object.assign(svgEl("text",{x:X(i),y:H-PB+17,"text-anchor":"middle",
+        "font-size":10,fill:"var(--ink-soft)","font-family":"JetBrains Mono, monospace"}),
+        {textContent:b.label}));
+    });
   }
-  // Break the line across gaps rather than interpolating — a missing week is
-  // missing data, not a straight line between two real readings.
-  let d="",pen=false,prev=-9;
-  pts.forEach(p=>{
-    const cmd=(!pen||p.i!==prev+1)?"M":"L";
-    d+=cmd+X(p.i).toFixed(2)+" "+Y(p.v).toFixed(2)+" ";
-    pen=true; prev=p.i;
-  });
-  const path=document.createElementNS(ns,"path");
-  path.setAttribute("d",d.trim());
-  path.setAttribute("fill","none");
-  path.setAttribute("stroke",o.color||"var(--swim)");
-  path.setAttribute("stroke-width","1.6");
-  path.setAttribute("stroke-linecap","round");
-  path.setAttribute("stroke-linejoin","round");
-  path.setAttribute("vector-effect","non-scaling-stroke");
-  svg.appendChild(path);
-  const last=pts[pts.length-1];
-  const dot=document.createElementNS(ns,"circle");
-  dot.setAttribute("cx",X(last.i)); dot.setAttribute("cy",Y(last.v)); dot.setAttribute("r","2.2");
-  dot.setAttribute("fill",o.color||"var(--swim)");
-  svg.appendChild(dot);
+
+  /* ── target reference ── */
+  if(m.target!=null){
+    svg.appendChild(svgEl("line",{x1:PL,x2:W-PR,y1:Y(m.target),y2:Y(m.target),
+      stroke:"var(--ink-soft)","stroke-width":big?1.2:0.6,"stroke-dasharray":big?"5 5":"2.5 2.5",
+      "vector-effect":"non-scaling-stroke"}));
+  }
+
+  /* ── within-bucket spread, drawn behind the line ── */
+  if(band){
+    /* One CLOSED subpath per contiguous run. A single path accumulating every
+       point produced n movetos but one Z, so the fill jumped the gaps and drew
+       a polygon that was not the data — visible on vo2max, skinTempDelta and
+       sweatRateMlH at weekly granularity, all of which have real gaps. */
+    const op=big?0.16:0.13;
+    let run=[];
+    const flush=()=>{
+      if(run.length>1){
+        const top=run.map((q,i)=>(i?"L":"M")+q.x+" "+q.hi).join("");
+        const bot=run.slice().reverse().map(q=>"L"+q.x+" "+q.lo).join("");
+        svg.appendChild(svgEl("path",{d:top+bot+"Z",fill:col,"fill-opacity":op,stroke:"none"}));
+      }else if(run.length===1&&run[0].hi!==run[0].lo){
+        // A lone bucket still has a real spread; draw it as a tick, not nothing.
+        svg.appendChild(svgEl("line",{x1:run[0].x,x2:run[0].x,y1:run[0].hi,y2:run[0].lo,
+          stroke:col,"stroke-opacity":op*2.2,"stroke-width":big?6:2.4,
+          "vector-effect":"non-scaling-stroke"}));
+      }
+      run=[];
+    };
+    band.forEach((b,i)=>{
+      if(!b||vals[i]==null){ flush(); return; }
+      run.push({x:X(i).toFixed(2),hi:Y(b.hi).toFixed(2),lo:Y(b.lo).toFixed(2)});
+    });
+    flush();
+  }
+
+  /* ── the series ── */
+  if(bars){
+    const gap=Math.min(bw*0.22,big?7:1.2);
+    pts.forEach(p=>{
+      const y=Y(p.v), y0=Y(Math.max(lo,0));
+      svg.appendChild(svgEl("rect",{x:X(p.i)-bw/2+gap/2,width:Math.max(0.4,bw-gap),
+        y:Math.min(y,y0),height:Math.max(0.6,Math.abs(y0-y)),fill:col,
+        "fill-opacity":buckets[p.i].partial?0.34:0.85,rx:big?2:0}));
+    });
+  }else{
+    // Break across gaps rather than interpolating: a missing week is missing
+    // data, not a straight line between two real readings.
+    let d="",pen=false,prev=-9;
+    pts.forEach(p=>{
+      d+=((!pen||p.i!==prev+1)?"M":"L")+X(p.i).toFixed(2)+" "+Y(p.v).toFixed(2)+" ";
+      pen=true; prev=p.i;
+    });
+    svg.appendChild(svgEl("path",{d:d.trim(),fill:"none",stroke:col,
+      "stroke-width":big?2.2:1.6,"stroke-linecap":"round","stroke-linejoin":"round",
+      "vector-effect":"non-scaling-stroke"}));
+    // Any point with no neighbour would otherwise be an unstroked lone moveto.
+    pts.forEach(p=>{
+      // A point with no neighbour is a lone moveto, which SVG does not stroke.
+      const alone=vals[p.i-1]==null&&vals[p.i+1]==null;
+      if(big||alone) svg.appendChild(svgDot(X(p.i),Y(p.v),col,big?4.5:3));
+    });
+  }
+
+  /* ── fitted trend ── */
+  const fit=lsqFit(pts);
+  if(fit&&pts.length>=4){
+    const i0=pts[0].i, i1=pts[pts.length-1].i;
+    const clip=v=>Math.max(lo,Math.min(hi,v));
+    svg.appendChild(svgEl("line",{x1:X(i0),y1:Y(clip(fit.a+fit.b*i0)),
+      x2:X(i1),y2:Y(clip(fit.a+fit.b*i1)),
+      stroke:col,"stroke-width":big?1.6:1,"stroke-dasharray":big?"7 5":"3 2.5",
+      "stroke-opacity":0.75,"vector-effect":"non-scaling-stroke"}));
+  }
+
+  /* ── mark the unfinished bucket so its shortfall is never read as a decline ── */
+  // Bars fade their unfinished bucket. A line's mean over fewer days is still a
+  // real mean, so it only gets hollowed out where there is room to notice.
+  const lastP=pts[pts.length-1];
+  if(big&&!bars&&buckets[lastP.i]&&buckets[lastP.i].partial){
+    svg.appendChild(svgDot(X(lastP.i),Y(lastP.v),"var(--card)",2.4));
+  }
   return svg;
 }
+
+/* ════════════════════════════════════════════════════════════
+   ENLARGE — click any card. Same series, room to actually read it.
+   ════════════════════════════════════════════════════════════ */
+function openMetricDialog(key,buckets){
+  const m=METRICS[key];
+  if(_mdlg){ _mdlg.remove(); _mdlg=null; }
+  const dlg=el("dialog","mdlg");
+  dlg.setAttribute("aria-label",m.label);           // showModal() needs a name
+  const vals=chartSeries(key,buckets);
+  const band=chartBand(key,buckets);
+  const pts=vals.map((v,i)=>({i,v})).filter(p=>p.v!=null);
+  const col=metricColor(key,buckets);
+
+  const hd=el("div","mdlg-hd");
+  const left=el("div");
+  const ttl=el("div","mdlg-ttl");
+  const dot=el("span","src-dot"); dot.style.background=SRC_COLOR[m.src]||"var(--ink-soft)";
+  ttl.appendChild(dot); ttl.appendChild(document.createTextNode(m.label));
+  left.appendChild(ttl);
+  const gran=(buckets[0]&&buckets[0].gran==="week")?"week":"month";
+  const sub=el("div","mdlg-sub");
+  sub.innerHTML=
+    pts.length+" of "+buckets.length+" "+gran+"s with data · "+
+    (buckets.length?esc(buckets[0].label)+" → "+esc(buckets[buckets.length-1].label):"")+
+    (isRate(key)?"<br>Normalised per "+(CHART.rate[key]==="week"?"week":"day")+
+      " — buckets are "+(gran==="week"?"7 days":"28 or 35 days")+" wide, so raw totals are not comparable."+
+      "<br>Divided by "+((m.src==="garmin"||m.src==="manual")
+        ? "days that carry a reading"
+        : m.src==="weeks" ? "weeks with a logged entry" : "elapsed days, capped at today")+
+      " — see the "+(CHART.rate[key]==="week"?"Weeks":"Days")+" column.":"")+
+    (CHART.domain[key]?"<br>Plotted on its true "+CHART.domain[key][0]+"–"+CHART.domain[key][1]+" scale.":"");
+  left.appendChild(sub);
+  hd.appendChild(left);
+  const x=el("button","mdlg-x"); x.type="button"; x.textContent="×";
+  x.setAttribute("aria-label","Close"); x.addEventListener("click",()=>dlg.close());
+  hd.appendChild(x);
+  dlg.appendChild(hd);
+
+  const bd=el("div","mdlg-bd");
+  bd.appendChild(buildChart(key,buckets,true,col));
+
+  const lg=el("div","mdlg-legend");
+  const keyBit=(c,lab,dash,fill)=>{
+    const sp=el("span");
+    const k=el("span","mdlg-key");
+    k.style.background=fill?c:"none";
+    k.style.opacity=fill?"0.22":"1";
+    if(!fill){ k.style.height="0"; k.style.borderTop=(dash?"2px dashed ":"2px solid ")+c; }
+    sp.appendChild(k); sp.appendChild(document.createTextNode(lab));
+    return sp;
+  };
+  lg.appendChild(keyBit(col,isRate(key)?"Per-"+(CHART.rate[key]==="week"?"week":"day")+" rate":gran+"ly value",false,false));
+  if(pts.length>=4) lg.appendChild(keyBit(col,"Fitted trend",true,false));
+  if(band)          lg.appendChild(keyBit(col,"Daily min–max in each "+gran,false,true));
+  if(m.target!=null)lg.appendChild(keyBit("var(--ink-soft)","Target "+fmtMetric(key,m.target),true,false));
+  if(buckets.some(b=>b.partial)) lg.appendChild(keyBit(col,"Unfinished "+gran+" (faded)",false,true));
+  bd.appendChild(lg);
+
+  /* Every plotted number, and the arithmetic behind it. */
+  const wrap=el("div","mdlg-tbl");
+  const tb=el("table");
+  const divLbl=CHART.rate[key]==="week"?"Weeks":"Days";
+  tb.innerHTML="<thead><tr><th>"+(gran==="week"?"Week":"Month")+"</th>"+
+    (isRate(key)
+      ? "<th>Total</th><th>"+divLbl+"</th><th>"+(CHART.rate[key]==="week"?"Per week":"Per day")+"</th>"
+      : "<th>Value</th>")+
+    (band?"<th>Low</th><th>High</th><th>Days</th>":"")+"</tr></thead>";
+  const body=el("tbody");
+  buckets.forEach((b,i)=>{
+    if(vals[i]==null) return;
+    const tr=el("tr"); if(b.partial) tr.className="part";
+    tr.appendChild(el("td",null,b.label+(b.partial?" · partial":"")));
+    if(isRate(key)){
+      // Total, divisor and rate side by side — the arithmetic has to be checkable,
+      // otherwise a normalised number is just a number you have to trust.
+      const dv=rateDiv(key,b);
+      tr.appendChild(el("td",null,m.fmt?m.fmt(metricValue(key,b)):String(metricValue(key,b))));
+      tr.appendChild(el("td",null,dv==null?"\u2014":(Math.round(dv*10)/10).toString()));
+      tr.appendChild(el("td",null,fmtMetric(key,vals[i])));
+    }else{
+      tr.appendChild(el("td",null,fmtMetric(key,vals[i])));
+    }
+    if(band){
+      const x=band[i];
+      tr.appendChild(el("td",null,x?fmtMetric(key,x.lo):"—"));
+      tr.appendChild(el("td",null,x?fmtMetric(key,x.hi):"—"));
+      tr.appendChild(el("td",null,x?String(x.n):"—"));
+    }
+    body.appendChild(tr);
+  });
+  tb.appendChild(body); wrap.appendChild(tb); bd.appendChild(wrap);
+
+  const note=el("div","mdlg-note");
+  const prov=metrics.sources[key];
+  note.textContent=
+    (m.src==="derived"
+      ? "Recomputed from your activities on every render — never stored, so a corrected calculation fixes the whole history at once."
+      : m.src==="weeks"
+      ? "Read from the weeks you keep by hand."
+      : m.src==="manual"
+      ? "Typed by hand in the coverage table below the charts."
+      : "Imported from your Garmin export"+(prov&&prov.file?" ("+prov.file+")":"")+
+        (prov&&prov.intraday?", "+prov.intraday+" reading per day":"")+".")+
+    (m.agg?" Rolled up "+m.agg+" across each "+gran+".":"")+
+    (CHART.sane[key]?" Values outside "+CHART.sane[key][0]+"–"+CHART.sane[key][1]+
+      " are treated as sensor artefacts and dropped on read.":"");
+  bd.appendChild(note);
+
+  dlg.appendChild(bd);
+  dlg.addEventListener("close",()=>{ dlg.remove(); if(_mdlg===dlg) _mdlg=null; });
+  // Click the backdrop to dismiss: the dialog box itself is the only child, so
+  // any click whose target is the dialog element landed outside it.
+  dlg.addEventListener("click",e=>{ if(e.target===dlg) dlg.close(); });
+  document.body.appendChild(dlg);
+  _mdlg=dlg;
+  dlg.showModal();
+}
+
+/** Direction colour for a metric over the window, shared by card and dialog. */
+function metricColor(key,buckets){
+  const vals=chartSeries(key,buckets).filter(v=>v!=null);
+  const e=edgeMeans(vals.map((v,i)=>({i,v})));
+  const cls=e?deltaClass(key,e.from,e.to):"neutral";
+  return cls==="up"?"var(--good)":(cls==="down"?"var(--bad)":"var(--ink-soft)");
+}
+
 const SRC_COLOR={garmin:"var(--swim)",derived:"var(--bike)",weeks:"var(--run)",manual:"var(--brick)"};
 
 function metricCard(key,buckets){
   const m=METRICS[key];
-  const series=metricSeries(key,buckets);
-  const known=series.filter(v=>v!=null);
+  const series=chartSeries(key,buckets);        // v38: as plotted, sums normalised
+  const pts=series.map((v,i)=>({i,v})).filter(p=>p.v!=null);
+  const gran=(buckets[0]&&buckets[0].gran==="week")?"week":"month";
+
   const c=el("div","mcard");
+  c.setAttribute("role","button");
+  c.setAttribute("tabindex","0");
+  c.setAttribute("aria-haspopup","dialog");
+  c.title="Click to enlarge";
+
   const lab=el("div","mk-l");
   const dot=el("span","src-dot"); dot.style.background=SRC_COLOR[m.src]||"var(--ink-soft)";
   dot.title=m.src;
   lab.appendChild(dot);
   lab.appendChild(document.createTextNode(m.label));
   c.appendChild(lab);
-  const last=known.length?known[known.length-1]:null;
-  c.appendChild(el("div","mk-v",fmtMetric(key,last)));
-  const first=known.length?known[0]:null;
-  const cls=deltaClass(key,first,last);
+  const xg=el("div","mk-x","\u2921");
+  xg.setAttribute("aria-hidden","true");            // decorative affordance only
+  c.appendChild(xg);
+
+  const last=pts.length?pts[pts.length-1].v:null;
+  const v=el("div","mk-v",last==null?"—":(m.fmt?m.fmt(last):String(last)));
+  const u=unitLabel(key);
+  if(last!=null&&u) v.appendChild(el("span","mk-u",u));
+  c.appendChild(v);
+
+  /* Change across the window, from the mean of the outer thirds rather than a
+     single bucket at each end — one noisy week no longer flips the verdict. */
+  const e=edgeMeans(pts);
+  const cls=e?deltaClass(key,e.from,e.to):"neutral";
   const d=el("div","mk-d "+cls);
-  if(known.length>1){
-    const diff=last-first;
-    d.textContent=(diff>=0?"+":"")+m.fmt(diff)+" over "+known.length+" "+
-      ((buckets[0]&&buckets[0].gran==="week")?"weeks":"months");
+  if(e){
+    const diff=e.to-e.from;
+    const span=pts[pts.length-1].i-pts[0].i+1;   // elapsed buckets, not readings
+    d.textContent=(diff>=0?"+":"")+(m.fmt?m.fmt(diff):String(Math.round(diff)))+
+      " over "+span+" "+gran+(span===1?"":"s");
+    d.title="Mean of the last "+e.k+" "+gran+(e.k===1?"":"s")+" versus the first "+e.k+
+      ", across "+pts.length+" with data";
   }else{
-    d.textContent=known.length?"one reading":"no data in range";
+    d.textContent=pts.length?"one reading":"no data in range";
   }
   c.appendChild(d);
-  c.appendChild(sparkline(series,{target:m.target,
-    color:cls==="up"?"var(--good)":(cls==="down"?"var(--bad)":"var(--ink-soft)"),
-    aria:m.label+" trend, "+known.length+" points"}));
+
+  const col=cls==="up"?"var(--good)":(cls==="down"?"var(--bad)":"var(--ink-soft)");
+  c.appendChild(buildChart(key,buckets,false,col));
+
+  const open=()=>openMetricDialog(key,buckets);
+  c.addEventListener("click",open);
+  c.addEventListener("keydown",ev=>{
+    if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); open(); }
+  });
   return c;
 }
 
@@ -2032,7 +2543,10 @@ function buildCoveragePanel(buckets){
         inp.dataset.manual=k;
         lastCell.appendChild(inp);
       }else{
-        lastCell.textContent=known.length?fmtMetric(k,known[known.length-1]):"\u2014";
+        // v38: read the PLOTTED series so a normalised metric's "latest" is the
+        // same number its card shows, not a raw bucket total under the same word.
+        const plotted=chartSeries(k,buckets).filter(x=>x!=null);
+        lastCell.textContent=plotted.length?fmtMetric(k,plotted[plotted.length-1]):"\u2014";
       }
       tr.appendChild(lastCell);
       body.appendChild(tr);
@@ -2241,17 +2755,6 @@ function buildIntensityPanel(iso){
     tb.appendChild(body); p.appendChild(tb);
   }
 
-  const note=el("div","int-note");
-  note.textContent=
-    "How this is measured: Strava reports one average heart rate per activity, not a "+
-    "zone histogram, so each session is classified by its average and the whole session "+
-    "counts toward that bucket. This reads HARSHER than a true time-in-zone figure — a "+
-    "run averaging 165 counts as fully hard here, while a watch would credit the "+
-    "warm-up and cool-down minutes as easy. Do not compare these percentages to the "+
-    "ones in Garmin; compare them to last month's. The metric still answers the "+
-    "question it exists for, because a genuinely easy session has a genuinely low "+
-    "average and will land in the easy bucket. Thresholds are editable from the header.";
-  p.appendChild(note);
   return p;
 }
 
@@ -2919,7 +3422,7 @@ async function openZip(file){
 /* Intraday reduction, mirroring the offline converter exactly. Readiness is a
    wake-up number and Garmin rewrites it downward as you train, so averaging a
    day understates it badly; VO2max takes the most recent reading. */
-const GARMIN_INTRADAY={vo2max:"last",vo2maxBike:"last",readiness:"first",
+const GARMIN_INTRADAY={vo2max:"last",vo2maxBike:"last",readiness:"first",   // readiness overridden below
   ctl:"last",atl:"last",acwr:"last",steps:"max",activeKcal:"max",totalKcal:"max",
   vigorousMin:"max",moderateMin:"max",sweatLossMl:"sum",weightKg:"last",bmi:"last",
   bioAge:"last",pred5kSec:"last",pred10kSec:"last",predHMSec:"last",predMSec:"last"};
@@ -2948,6 +3451,10 @@ function garminISO(v){
 async function garminZipToMetrics(zip,progress){
   const bag={};                                  // iso -> key -> [values]
   const prov={};
+  /* Readiness is a WAKE-UP number, and picking it needs the record's context,
+     which is gone by the time `bag` holds bare values — so it is resolved here,
+     per day, and written over the rollup at the end. See the note below. */
+  const wake={}, morn={};
   const add=(iso,key,value,fileName,srcLabel)=>{
     if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
     const v=num(value); if(v===null) return;
@@ -3019,7 +3526,26 @@ async function garminZipToMetrics(zip,progress){
   await each(/TrainingReadinessDTO.*\.json$/i,(r,f)=>{
     const iso=garminISO(r.calendarDate); if(!iso) return;
     add(iso,"readiness",r.score,f);
-    add(iso,"hrvWeekly",r.hrvWeeklyAverage,f);
+    /* v38 FIX. "first record of the day" was picking a post-midnight
+       UPDATE_REALTIME_VARIABLES row carrying the PREVIOUS evening's number —
+       Garmin stamps one at ~00:13-00:45 most nights. The real wake-up reading
+       lands six or seven hours later under AFTER_WAKEUP_RESET. Across this
+       export that was wrong on 23 of 144 days, by 20 points on average and by
+       54 at worst (19 May: stored 78, actual 24). Prefer the wake-up record;
+       fall back to the first reading after 04:00 local; only then to the first. */
+    const sc=num(r.score);
+    if(sc!==null){
+      const local=String(r.timestampLocal||"");
+      const hh=parseInt(local.slice(11,13),10);
+      if(r.inputContext==="AFTER_WAKEUP_RESET"){ if(wake[iso]==null) wake[iso]=sc; }
+      else if(hh>=4&&morn[iso]==null) morn[iso]=sc;
+    }
+    prov.readiness={src:"garmin",file:f,intraday:"wake-up"};
+    // Garmin writes 511 (0x1FF, "no reading") into hrvWeeklyAverage until the
+    // 7-day baseline exists — six times across the first four days here. One of
+    // them sets the y-axis maximum for the whole card, so drop it at the door.
+    // storedVals() also filters on read, which repairs an already-imported store.
+    if(saneVal("hrvWeekly",num(r.hrvWeeklyAverage))) add(iso,"hrvWeekly",r.hrvWeeklyAverage,f);
   });
   await each(/RunRacePredictions.*\.json$/i,(r,f)=>{
     const iso=garminISO(r.calendarDate); if(!iso) return;
@@ -3054,6 +3580,10 @@ async function garminZipToMetrics(zip,progress){
       const v=aggregate(bag[iso][k],GARMIN_INTRADAY[k]||"mean");
       if(v!==null) row[k]=Math.round(v*1000)/1000;
     });
+    if(row.readiness!=null){
+      const w=wake[iso]!=null?wake[iso]:morn[iso];
+      if(w!=null) row.readiness=w;
+    }
     if(Object.keys(row).length) days[iso]=row;
   });
   const sources={};
